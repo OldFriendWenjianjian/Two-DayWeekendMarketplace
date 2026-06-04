@@ -1502,6 +1502,96 @@ code {
   font-size: 13px;
 }
 
+.governance-box__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.governance-box__head > span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(47, 143, 131, 0.12);
+  color: #226c62;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.governance-box small,
+.consensus-panel small {
+  color: #6b5830;
+  line-height: 1.5;
+}
+
+.consensus-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.consensus-panel p {
+  margin: 0;
+  color: #557069;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.consensus-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f3fbf7;
+  color: #226c62;
+}
+
+.consensus-score span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.consensus-score strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.anchor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.anchor-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.anchor-grid span {
+  min-height: 58px;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 8px;
+  border: 1px solid rgba(31, 53, 47, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #557069;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.anchor-grid span.active {
+  border-color: rgba(47, 143, 131, 0.28);
+  background: #f3fbf7;
+  color: #226c62;
+}
+
+.anchor-grid strong {
+  color: #1f352f;
+  font-size: 14px;
+}
+
 .review {
   display: grid;
   gap: 5px;

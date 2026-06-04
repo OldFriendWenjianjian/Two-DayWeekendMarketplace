@@ -32,6 +32,7 @@ import { LiveFeed } from './components/LiveFeed';
 import { LivePanel } from './components/LivePanel';
 import { ProductCard } from './components/ProductCard';
 import { apiPresets, getApiBase, loadMarketplace, postMarketplaceAction, resetApiBase, setApiBase } from './lib/api';
+import { evaluateConsensusAction, formatGovernanceWeight, type ConsensusActor } from './lib/consensus';
 import { getProductCover, getProductImages, isRasterImageSource, visualBackgroundStyle } from './lib/images';
 import { mockData } from './lib/mockData';
 import {
@@ -69,6 +70,8 @@ const coverTones: Array<{ id: CoverTone; label: string }> = [
   { id: 'warm', label: '温暖' },
   { id: 'fresh', label: '鲜明' },
 ];
+
+const currentUserKey = 'android-buyer-demo';
 
 function withPendingProducts(payload: MarketplacePayload, uploads: PendingProductUpload[]): MarketplacePayload {
   return {
@@ -241,6 +244,41 @@ function App() {
   const selectedProduct = getProduct(data, selectedProductId) || data.products[0];
   const selectedStore = getStore(data, selectedStoreId) || data.stores[0];
   const total = cartTotal(cart, data);
+  const selectedProductCompletedOrderId = useMemo(
+    () =>
+      data.orders.find((order) =>
+        order.status === '已完成' && order.items.some((item) => item.productId === selectedProduct.id)
+      )?.id,
+    [data.orders, selectedProduct.id]
+  );
+  const currentActor: ConsensusActor = useMemo(() => {
+    const completedOrderIds = data.orders
+      .filter((order) => order.status === '已完成')
+      .map((order) => order.id);
+
+    return {
+      id: currentUserKey,
+      completedOrderIds,
+      reputationStake: 0,
+      witnessEndorsements: 0,
+      maliciousActionCount: 0,
+    };
+  }, [data.orders]);
+  const profileConsensus = useMemo(
+    () => evaluateConsensusAction(currentActor, {
+      type: 'removal_vote',
+      orderId: currentActor.completedOrderIds[0],
+    }),
+    [currentActor]
+  );
+  const productConsensus = useMemo(
+    () => evaluateConsensusAction(currentActor, { type: 'removal_vote', orderId: selectedProductCompletedOrderId }),
+    [currentActor, selectedProductCompletedOrderId]
+  );
+  const complaintConsensus = useMemo(
+    () => evaluateConsensusAction(currentActor, { type: 'staked_complaint', orderId: selectedProductCompletedOrderId }),
+    [currentActor, selectedProductCompletedOrderId]
+  );
 
   const notify = (value: string) => {
     setToast(value);
@@ -280,30 +318,61 @@ function App() {
   };
 
   const voteDown = async (productId: string) => {
+    const evaluation = productId === selectedProduct.id
+      ? productConsensus
+      : evaluateConsensusAction(currentActor, { type: 'removal_vote' });
     const result = await postMarketplaceAction(`/products/${productId}/reports`, {
-      reporterKey: 'android-buyer-demo',
-      reason: '用户发起社区投票下架',
+      reporterKey: currentUserKey,
+      reason: evaluation.canAffectCoreReputation
+        ? '用户基于双锚共识发起治理下架'
+        : '用户提交 0 权重普通反馈',
+      consensus: {
+        version: evaluation.version,
+        governanceWeight: evaluation.governanceWeight,
+        hasTradeAnchor: evaluation.hasTradeAnchor,
+        hasResponsibilityAnchor: evaluation.hasResponsibilityAnchor,
+        ledgerImpact: evaluation.ledgerImpact,
+      },
     });
     if (!result.ok) {
       notify(result.message);
       return;
     }
-    setDownVotes((votes) => ({ ...votes, [productId]: (votes[productId] || 0) + 1 }));
-    notify(result.mode === 'mock' ? '演示模式：下架投票已记录' : '下架投票已进入信誉账本');
+    if (evaluation.governanceWeight > 0) {
+      setDownVotes((votes) => ({ ...votes, [productId]: (votes[productId] || 0) + evaluation.governanceWeight }));
+    }
+    notify(
+      evaluation.governanceWeight > 0
+        ? `共识权重 ${formatGovernanceWeight(evaluation.governanceWeight)} 已进入治理队列`
+        : '已记录普通反馈：无交易/押注锚，不影响核心信誉'
+    );
     if (result.mode === 'remote') refreshMarketplace();
   };
 
   const submitComplaint = async () => {
     const result = await postMarketplaceAction(`/sellers/${selectedStore.id}/complaints`, {
-      complainantKey: 'android-buyer-demo',
+      complainantKey: currentUserKey,
       productId: selectedProduct?.id,
-      reason: '商品描述与履约争议',
+      reason: complaintConsensus.canAffectCoreReputation
+        ? '商品描述与履约争议，按双锚共识进入治理'
+        : '商品描述与履约争议，先作为普通反馈留痕',
+      consensus: {
+        version: complaintConsensus.version,
+        governanceWeight: complaintConsensus.governanceWeight,
+        hasTradeAnchor: complaintConsensus.hasTradeAnchor,
+        hasResponsibilityAnchor: complaintConsensus.hasResponsibilityAnchor,
+        ledgerImpact: complaintConsensus.ledgerImpact,
+      },
     });
     if (!result.ok) {
       notify(result.message);
       return;
     }
-    notify(result.mode === 'mock' ? '演示模式：投诉事件已准备上链' : '投诉记录已进入信誉账本');
+    notify(
+      complaintConsensus.governanceWeight > 0
+        ? '投诉已带共识锚进入治理账本'
+        : '投诉已作为普通反馈留痕'
+    );
     if (result.mode === 'remote') refreshMarketplace();
   };
 
@@ -629,7 +698,7 @@ function App() {
           <ServerStatusPanel />
           <section className="policy-banner">
             <strong>上架原则</strong>
-            <span>本超市只展示承诺双休、不强制加班公司的产品；不符合理念的商品可投诉或投票下架。</span>
+            <span>本超市只展示承诺双休、不强制加班公司的产品；不符合理念的商品可投诉，并按双锚共识进入治理。</span>
           </section>
           <section className="quick-grid">
             <button onClick={() => goMain('category')}>
@@ -1192,6 +1261,32 @@ function App() {
           <Settings size={19} /> API 设置
         </button>
       </section>
+      <section className="panel consensus-panel">
+        <div className="section-title">
+          <span>我的共识权</span>
+          <ShieldCheck size={18} />
+        </div>
+        <div className="consensus-score">
+          <span>当前可用权重</span>
+          <strong>{formatGovernanceWeight(profileConsensus.governanceWeight)}</strong>
+        </div>
+        <p>账号数量和账号年龄不产生治理权；只有真实交易锚或责任押注锚，才会影响核心信誉。</p>
+        <div className="anchor-grid">
+          <span>
+            <strong>{currentActor.completedOrderIds.length}</strong>
+            已完成订单锚
+          </span>
+          <span>
+            <strong>{currentActor.reputationStake}</strong>
+            责任押注额度
+          </span>
+          <span>
+            <strong>{currentActor.witnessEndorsements}</strong>
+            见证背书
+          </span>
+        </div>
+        <small>评价别人，也会写入自己的履历；恶意投诉会降低后续共识权。</small>
+      </section>
       <section className="panel">
         <div className="section-title">
           <span>全站治理账本</span>
@@ -1252,10 +1347,30 @@ function App() {
           ))}
         </div>
         <section className="governance-box">
-          <strong>社区治理</strong>
-          <span>发现虚假、违规、履约严重异常，或店家公司不符合双休不加班理念，可发起投票下架并形成账本记录。</span>
-          <button className="danger-button" onClick={() => voteDown(selectedProduct.id)}>
-            <ThumbsDown size={16} /> 投票下架（{downVotes[selectedProduct.id] || 0}）
+          <div className="governance-box__head">
+            <strong>双锚治理</strong>
+            <span>权重 {formatGovernanceWeight(productConsensus.governanceWeight)}</span>
+          </div>
+          <span>空号、号龄和批量注册不算票；只有真实交易锚或责任押注锚，才会影响商户核心信誉。</span>
+          <div className="anchor-grid anchor-grid--compact">
+            <span className={productConsensus.hasTradeAnchor ? 'active' : ''}>
+              <strong>{productConsensus.hasTradeAnchor ? '已成立' : '未成立'}</strong>
+              真实交易锚
+            </span>
+            <span className={productConsensus.hasResponsibilityAnchor ? 'active' : ''}>
+              <strong>{productConsensus.hasResponsibilityAnchor ? '已成立' : '未成立'}</strong>
+              责任押注锚
+            </span>
+          </div>
+          <small>{productConsensus.reason}</small>
+          <button
+            className={productConsensus.governanceWeight > 0 ? 'danger-button' : 'soft-button'}
+            onClick={() => voteDown(selectedProduct.id)}
+          >
+            <ThumbsDown size={16} />
+            {productConsensus.governanceWeight > 0
+              ? `共识下架（${formatGovernanceWeight(downVotes[selectedProduct.id] || 0)}）`
+              : '提交反馈（权重 0）'}
           </button>
         </section>
         <section>
@@ -1338,7 +1453,7 @@ function App() {
       <HeaderBack title="评价 / 投诉" />
       <div className="seller-form">
         <input value={selectedStore.name} readOnly />
-        <textarea defaultValue="描述争议、证据或建议，提交后将进入信誉治理流程。" />
+        <textarea defaultValue="描述争议、证据或建议。没有交易锚或责任押注锚时，只作为普通反馈留痕。" />
         <button className="primary-button" onClick={submitComplaint}><Flag size={16} /> 提交投诉</button>
       </div>
       <LedgerTimeline events={data.ledgerEvents.filter((event) => event.type === 'complaint' || event.type === 'review')} />
