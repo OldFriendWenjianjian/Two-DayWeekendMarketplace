@@ -1,0 +1,19 @@
+{
+  "name": "two-day-weekend-marketplace-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js backend for the 双休超市 discovery server.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "test": "npm run selftest",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed.js",
+    "selftest": "node --disable-warning=ExperimentalWarning scripts/selftest.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

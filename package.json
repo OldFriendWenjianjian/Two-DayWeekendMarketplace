@@ -1,0 +1,12 @@
+{
+  "name": "two-day-weekend-marketplace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Android blockchain reputation marketplace with discovery server and live room indexing.",
+  "scripts": {
+    "branding": "python scripts/generate_branding.py",
+    "test": "pwsh -NoProfile -File scripts/regression.ps1",
+    "deploy": "pwsh -NoProfile -File deploy/deploy.ps1"
+  }
+}
+

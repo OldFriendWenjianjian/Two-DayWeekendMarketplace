@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">双休超市</string>
+    <string name="app_name_cn">双休超市</string>
+    <string name="file_chooser_title">Select file or camera</string>
+    <string name="no_file_picker">No file picker is available on this device.</string>
+</resources>
