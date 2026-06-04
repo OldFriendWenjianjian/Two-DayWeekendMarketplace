@@ -2,6 +2,8 @@
   "server_ipv6": "2402:4e00:c013:8600:5602:3dc2:a2d0:0",
   "scheme": "http",
   "base_path": "/shc-20260520-a1faaf/weekend-marketplace/",
+  "admin_token": "",
+  "history_minutes": 360,
   "poll_interval_seconds": 8,
   "request_timeout_seconds": 4,
   "signal_probe_room_id": "monitor-probe",
