@@ -5,12 +5,14 @@ import {
   ChevronLeft,
   CheckCircle,
   CircleUserRound,
+  CloudUpload,
   ClipboardList,
   Flag,
   Home,
   ListFilter,
   PackagePlus,
   Palette,
+  RefreshCw,
   Search,
   Settings,
   ShieldCheck,
@@ -21,14 +23,23 @@ import {
   UploadCloud,
   UserPlus,
   Wand2,
+  Wifi,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LedgerTimeline } from './components/LedgerTimeline';
 import { LivePanel } from './components/LivePanel';
 import { ProductCard } from './components/ProductCard';
 import { apiPresets, getApiBase, loadMarketplace, postMarketplaceAction, resetApiBase, setApiBase } from './lib/api';
 import { getProductCover, getProductImages, isRasterImageSource, visualBackgroundStyle } from './lib/images';
 import { mockData } from './lib/mockData';
+import {
+  createPendingProductUpload,
+  loadPendingProductUploads,
+  mergePendingProductUploads,
+  savePendingProductUploads,
+  type PendingProductUpload,
+  type ProductUploadPayload,
+} from './lib/pendingUploads';
 import { cartTotal, filterProducts, formatCurrency, getProduct, getStore, storeProducts } from './lib/selectors';
 import type { ApiHealth, CartItem, MarketplacePayload, ProductCategory } from './lib/types';
 
@@ -47,6 +58,7 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof Home }> = [
 const createSellerId = () => `weekend-shop-${Date.now().toString(36).slice(-5)}`;
 
 const maxListingImages = 6;
+const serverIpv6Address = '2402:4e00:c013:8600:5602:3dc2:a2d0:0';
 const coverBackgrounds = ['#2f8f83', '#4f7fcf', '#d5684e', '#b5527e', '#4e8f9b', '#6b8f3a'];
 const coverAccents = ['#f8d36b', '#ffffff', '#ffd6c8', '#bce6dc', '#d8e8ff', '#f4d0df'];
 const coverTones: Array<{ id: CoverTone; label: string }> = [
@@ -54,6 +66,13 @@ const coverTones: Array<{ id: CoverTone; label: string }> = [
   { id: 'warm', label: '温暖' },
   { id: 'fresh', label: '鲜明' },
 ];
+
+function withPendingProducts(payload: MarketplacePayload, uploads: PendingProductUpload[]): MarketplacePayload {
+  return {
+    ...payload,
+    products: mergePendingProductUploads(payload.products, uploads),
+  };
+}
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -147,6 +166,13 @@ function App() {
     mode: 'mock',
     message: '正在连接后端',
   });
+  const [lastConnectivityCheck, setLastConnectivityCheck] = useState('');
+  const [pendingUploads, setPendingUploads] = useState<PendingProductUpload[]>(() =>
+    loadPendingProductUploads(window.localStorage)
+  );
+  const [pendingUploadStorageError, setPendingUploadStorageError] = useState('');
+  const [isRetryingUploads, setIsRetryingUploads] = useState(false);
+  const lastAutoRetryKeyRef = useRef('');
   const [tab, setTab] = useState<Tab>('home');
   const [screen, setScreen] = useState<Screen>('main');
   const [query, setQuery] = useState('');
@@ -190,11 +216,18 @@ function App() {
     refreshMarketplace();
   }, []);
 
+  useEffect(() => {
+    const result = savePendingProductUploads(window.localStorage, pendingUploads);
+    setPendingUploadStorageError(result.ok ? '' : result.message);
+    setData((current) => withPendingProducts(current, pendingUploads));
+  }, [pendingUploads]);
+
   const refreshMarketplace = async () => {
     const result = await loadMarketplace();
-      setData(result.data);
-      setHealth(result.health);
-      setApiBaseInput(result.health.apiBase);
+    setData(withPendingProducts(result.data, pendingUploads));
+    setHealth(result.health);
+    setApiBaseInput(result.health.apiBase);
+    setLastConnectivityCheck(new Date().toISOString());
   };
 
   const products = useMemo(
@@ -450,7 +483,7 @@ function App() {
       notify('请先上传图片或生成商品封面');
       return;
     }
-    const result = await postMarketplaceAction('/products', {
+    const payload: ProductUploadPayload = {
       sellerId,
       title,
       description: productDraft.description.trim(),
@@ -459,12 +492,13 @@ function App() {
       currency: 'CNY',
       contact,
       images: productDraft.images,
-    });
+    };
+    const result = await postMarketplaceAction('/products', payload);
     if (!result.ok) {
       notify(result.message);
       return;
     }
-    notify(result.mode === 'mock' ? '演示模式：商品草稿已保存' : '商品已上架，仅展示双休不加班公司的产品');
+    notify(result.mode === 'mock' ? '服务器未确认，已保存到待上传队列' : '商品已上架，仅展示双休不加班公司的产品');
     if (result.mode === 'remote') {
       await refreshMarketplace();
       const createdId =
@@ -478,48 +512,87 @@ function App() {
       }
       return;
     }
-    const localId = `local-${Date.now().toString(36)}`;
-    setData((current) => ({
-      ...current,
-      products: [
-        {
-          id: localId,
-          storeId: sellerId,
-          title,
-          category: productDraft.category,
-          price,
-          stock: 99,
-          rating: 4.8,
-          sold: 0,
-          image: productDraft.images[0],
-          images: productDraft.images,
-          tags: ['双休承诺', '本地草稿'],
-          description: productDraft.description.trim(),
-          specs: { 联系: contact, 状态: '待同步', 入驻规则: '双休不加班' },
-        },
-        ...current.products,
-      ],
-    }));
-    setSelectedProductId(localId);
+    const pendingUpload = createPendingProductUpload(payload);
+    setPendingUploads((uploads) => [pendingUpload, ...uploads]);
+    setSelectedProductId(pendingUpload.localProductId);
     setSelectedDetailImage(0);
     setScreen('product');
   };
 
+  const retryPendingUploads = async (targetId?: string) => {
+    if (isRetryingUploads) return;
+    const targets = pendingUploads.filter((upload) => !targetId || upload.id === targetId);
+    if (targets.length === 0) {
+      notify('没有待上传商品');
+      return;
+    }
+
+    setIsRetryingUploads(true);
+    setPendingUploads((uploads) =>
+      uploads.map((upload) =>
+        targets.some((target) => target.id === upload.id)
+          ? { ...upload, status: 'syncing', error: undefined, lastAttemptAt: new Date().toISOString() }
+          : upload
+      )
+    );
+
+    let uploaded = 0;
+    let failed = 0;
+    for (const upload of targets) {
+      const result = await postMarketplaceAction('/products', upload.payload);
+      if (result.ok && result.mode === 'remote') {
+        uploaded += 1;
+        setPendingUploads((uploads) => uploads.filter((item) => item.id !== upload.id));
+      } else {
+        failed += 1;
+        const message =
+          result.mode === 'mock' ? 'IPv6 服务器仍未确认，保留待上传' : result.message || '服务器拒绝上传';
+        setPendingUploads((uploads) =>
+          uploads.map((item) =>
+            item.id === upload.id
+              ? { ...item, status: 'failed', error: message, lastAttemptAt: new Date().toISOString() }
+              : item
+          )
+        );
+      }
+    }
+
+    setIsRetryingUploads(false);
+    if (uploaded > 0) {
+      await refreshMarketplace();
+    }
+    notify(
+      uploaded > 0 && failed === 0
+        ? `已上传 ${uploaded} 件待同步商品`
+        : `上传完成：成功 ${uploaded} 件，待处理 ${failed} 件`
+    );
+  };
+
+  useEffect(() => {
+    if (health.mode !== 'remote' || pendingUploads.length === 0 || isRetryingUploads) return;
+    const autoRetryKey = pendingUploads.map((upload) => `${upload.id}:${upload.status}`).join('|');
+    if (lastAutoRetryKeyRef.current === autoRetryKey) return;
+    lastAutoRetryKeyRef.current = autoRetryKey;
+    void retryPendingUploads();
+  }, [health.mode, pendingUploads.length]);
+
   const saveApiBase = async (base: string) => {
     setApiBase(base);
     const result = await loadMarketplace();
-    setData(result.data);
+    setData(withPendingProducts(result.data, pendingUploads));
     setHealth(result.health);
     setApiBaseInput(result.health.apiBase);
+    setLastConnectivityCheck(new Date().toISOString());
     notify('API 基路径已更新');
   };
 
   const resetApi = async () => {
     resetApiBase();
     const result = await loadMarketplace();
-    setData(result.data);
+    setData(withPendingProducts(result.data, pendingUploads));
     setHealth(result.health);
     setApiBaseInput(result.health.apiBase);
+    setLastConnectivityCheck(new Date().toISOString());
     notify('已恢复默认 API');
   };
 
@@ -543,10 +616,7 @@ function App() {
             </button>
           </section>
           <SearchBar />
-          <section className="status-line">
-            <span className={`dot dot--${health.mode}`} />
-            {health.mode === 'remote' ? '后端在线' : '后端不可用，当前为 mock 演示'}
-          </section>
+          <ServerStatusPanel />
           <section className="policy-banner">
             <strong>上架原则</strong>
             <span>本超市只展示承诺双休、不强制加班公司的产品；不符合理念的商品可投诉或投票下架。</span>
@@ -616,6 +686,77 @@ function App() {
       />
     </label>
   );
+
+  const ServerStatusPanel = () => {
+    const checkedAt = lastConnectivityCheck
+      ? new Date(lastConnectivityCheck).toLocaleTimeString('zh-CN', { hour12: false })
+      : '未检查';
+
+    return (
+      <section className={`server-status server-status--${health.mode}`}>
+        <div className="server-status__main">
+          <span className={`dot dot--${health.mode}`} />
+          <Wifi size={16} />
+          <div>
+            <strong>{health.mode === 'remote' ? 'IPv6 服务器已连通' : 'IPv6 服务器未确认'}</strong>
+            <small>{serverIpv6Address}</small>
+          </div>
+        </div>
+        <div className="server-status__meta">
+          <span>{health.message}</span>
+          <span>上次检查 {checkedAt}</span>
+          {pendingUploads.length > 0 && <span>{pendingUploads.length} 件商品待上传</span>}
+        </div>
+        <div className="server-status__actions">
+          <button className="soft-button" onClick={refreshMarketplace}>
+            <RefreshCw size={15} /> 检查
+          </button>
+          {pendingUploads.length > 0 && (
+            <button className="primary-button" onClick={() => retryPendingUploads()} disabled={isRetryingUploads}>
+              <CloudUpload size={15} /> {isRetryingUploads ? '上传中' : '重传商品'}
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const PendingUploadBanner = () => {
+    if (pendingUploads.length === 0 && !pendingUploadStorageError) return null;
+
+    return (
+      <section className="pending-upload-banner">
+        <div className="pending-upload-banner__head">
+          <CloudUpload size={17} />
+          <strong>{pendingUploads.length > 0 ? '商品等待上传服务器' : '待上传状态异常'}</strong>
+          {pendingUploads.length > 0 && <span>{pendingUploads.length} 件</span>}
+        </div>
+        {pendingUploadStorageError && <p>本地持久保存失败：{pendingUploadStorageError}</p>}
+        {pendingUploads.length > 0 && (
+          <>
+            <p>这些商品已经保存在本机队列里，网络恢复后可自动或手动重新上传。</p>
+            <div className="pending-upload-list">
+              {pendingUploads.slice(0, 3).map((upload) => (
+                <article key={upload.id}>
+                  <div>
+                    <strong>{upload.payload.title}</strong>
+                    <span>{upload.error || (upload.status === 'syncing' ? '正在上传' : '等待服务器确认')}</span>
+                  </div>
+                  <button
+                    className="soft-button"
+                    disabled={isRetryingUploads || upload.status === 'syncing'}
+                    onClick={() => retryPendingUploads(upload.id)}
+                  >
+                    <RefreshCw size={14} /> 重传
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    );
+  };
 
   const ProductSection = ({ title, products: listed }: { title: string; products: typeof data.products }) => (
     <section className="panel">
@@ -1183,6 +1324,7 @@ function App() {
   const renderSettings = () => (
     <section className="panel full-panel">
       <HeaderBack title="API 设置" />
+      <ServerStatusPanel />
       <div className="api-box">
         <label>
           <span>当前 API 基路径</span>
@@ -1209,6 +1351,7 @@ function App() {
   return (
     <div className="app-shell">
       <main className={screen === 'main' ? 'app-main app-main--tabs' : 'app-main'}>
+        <PendingUploadBanner />
         {screen === 'main' && renderMain()}
         {screen === 'product' && renderProduct()}
         {screen === 'store' && renderStore()}

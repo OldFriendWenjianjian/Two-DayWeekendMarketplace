@@ -30,6 +30,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
@@ -122,6 +127,133 @@ body {
   font-size: 12px;
   color: #62756f;
   margin: 4px 2px 12px;
+}
+
+.server-status {
+  display: grid;
+  gap: 9px;
+  margin: 10px 0 12px;
+  padding: 11px;
+  border: 1px solid rgba(31, 53, 47, 0.08);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 8px 22px rgba(31, 53, 47, 0.06);
+}
+
+.server-status--remote {
+  border-color: rgba(47, 143, 131, 0.22);
+  background: #f3fbf7;
+}
+
+.server-status--mock {
+  border-color: rgba(213, 104, 78, 0.22);
+  background: #fff8f3;
+}
+
+.server-status__main {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+
+.server-status__main strong {
+  display: block;
+  font-size: 14px;
+}
+
+.server-status__main small,
+.server-status__meta {
+  color: #62756f;
+  font-size: 12px;
+}
+
+.server-status__main small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.server-status__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.server-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pending-upload-banner {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(179, 134, 47, 0.2);
+  border-radius: 8px;
+  background: #fff8ec;
+  color: #6b5830;
+}
+
+.pending-upload-banner__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1f352f;
+}
+
+.pending-upload-banner__head strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.pending-upload-banner__head span {
+  color: #b3862f;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.pending-upload-banner p {
+  margin: 0;
+  color: #6b5830;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pending-upload-list {
+  display: grid;
+  gap: 7px;
+}
+
+.pending-upload-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.pending-upload-list strong,
+.pending-upload-list span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-upload-list strong {
+  color: #1f352f;
+  font-size: 13px;
+}
+
+.pending-upload-list span {
+  margin-top: 2px;
+  color: #6b5830;
+  font-size: 12px;
 }
 
 .policy-banner {
