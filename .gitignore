@@ -33,3 +33,6 @@ coverage/
 .vscode/
 local.properties
 downloaded-*.apk
+tools/server-monitor/build/
+tools/server-monitor/dist/
+tools/server-monitor/config.json
