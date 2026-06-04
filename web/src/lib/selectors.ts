@@ -1,4 +1,4 @@
-import type { CartItem, MarketplacePayload, Product, ProductCategory, Store } from './types';
+import type { CartItem, MarketplacePayload, Order, Product, ProductCategory, Store } from './types';
 
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(value);
@@ -36,3 +36,11 @@ export const cartTotal = (items: CartItem[], data: MarketplacePayload) =>
 
 export const storeProducts = (data: MarketplacePayload, store: Store) =>
   data.products.filter((product) => product.storeId === store.id);
+
+export const completedOrdersForBuyer = (orders: Order[], buyerKey: string) =>
+  orders.filter((order) => order.status === '已完成' && order.buyerKey === buyerKey);
+
+export const completedOrderIdForBuyerProduct = (orders: Order[], buyerKey: string, productId: string) =>
+  completedOrdersForBuyer(orders, buyerKey).find((order) =>
+    order.items.some((item) => item.productId === productId)
+  )?.id;

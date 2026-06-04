@@ -76,7 +76,9 @@ export function evaluateConsensusAction(
   thresholds: ConsensusThresholds = defaultConsensusThresholds
 ): ConsensusEvaluation {
   const hasTradeAnchor = Boolean(action.orderId && actor.completedOrderIds.includes(action.orderId));
-  const witnessCount = action.witnessSignatures?.length || actor.witnessEndorsements || 0;
+  const witnessCount = action.witnessSignatures
+    ? new Set(action.witnessSignatures.filter(Boolean)).size
+    : actor.witnessEndorsements || 0;
   const actionStake = action.stake || 0;
   const effectiveStake = Math.max(actionStake, actor.reputationStake);
   const hasStakeAnchor = effectiveStake >= thresholds.minimumResponsibilityStake;
@@ -155,6 +157,9 @@ export function evaluateConsensusAction(
 
 export const sumGovernanceWeight = (evaluations: ConsensusEvaluation[]) =>
   rounded(evaluations.reduce((total, item) => total + item.governanceWeight, 0));
+
+export const canSubmitGovernanceToServer = (evaluation: ConsensusEvaluation) =>
+  evaluation.canAffectCoreReputation && evaluation.governanceWeight > 0;
 
 export const formatGovernanceWeight = (weight: number) =>
   Number.isInteger(weight) ? `${weight}` : weight.toFixed(2);

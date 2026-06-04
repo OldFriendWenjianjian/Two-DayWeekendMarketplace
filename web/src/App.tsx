@@ -32,8 +32,20 @@ import { LiveFeed } from './components/LiveFeed';
 import { LivePanel } from './components/LivePanel';
 import { ProductCard } from './components/ProductCard';
 import { apiPresets, getApiBase, loadMarketplace, postMarketplaceAction, resetApiBase, setApiBase } from './lib/api';
-import { evaluateConsensusAction, formatGovernanceWeight, type ConsensusActor } from './lib/consensus';
+import {
+  canSubmitGovernanceToServer,
+  evaluateConsensusAction,
+  formatGovernanceWeight,
+  type ConsensusActor,
+  type ConsensusEvaluation,
+} from './lib/consensus';
 import { getProductCover, getProductImages, isRasterImageSource, visualBackgroundStyle } from './lib/images';
+import {
+  createLocalConsensusFeedback,
+  loadLocalConsensusFeedback,
+  saveLocalConsensusFeedback,
+  type LocalConsensusFeedback,
+} from './lib/localConsensusFeedback';
 import { mockData } from './lib/mockData';
 import {
   createPendingProductUpload,
@@ -43,7 +55,16 @@ import {
   type PendingProductUpload,
   type ProductUploadPayload,
 } from './lib/pendingUploads';
-import { cartTotal, filterProducts, formatCurrency, getProduct, getStore, storeProducts } from './lib/selectors';
+import {
+  cartTotal,
+  completedOrderIdForBuyerProduct,
+  completedOrdersForBuyer,
+  filterProducts,
+  formatCurrency,
+  getProduct,
+  getStore,
+  storeProducts,
+} from './lib/selectors';
 import type { ApiHealth, CartItem, MarketplacePayload, ProductCategory } from './lib/types';
 
 type Tab = 'home' | 'category' | 'live' | 'cart' | 'seller' | 'profile';
@@ -176,7 +197,11 @@ function App() {
   const [pendingUploads, setPendingUploads] = useState<PendingProductUpload[]>(() =>
     loadPendingProductUploads(window.localStorage)
   );
+  const [localFeedback, setLocalFeedback] = useState<LocalConsensusFeedback[]>(() =>
+    loadLocalConsensusFeedback(window.localStorage)
+  );
   const [pendingUploadStorageError, setPendingUploadStorageError] = useState('');
+  const [localFeedbackStorageError, setLocalFeedbackStorageError] = useState('');
   const [isRetryingUploads, setIsRetryingUploads] = useState(false);
   const lastAutoRetryKeyRef = useRef('');
   const [tab, setTab] = useState<Tab>('home');
@@ -229,6 +254,11 @@ function App() {
     setData((current) => withPendingProducts(current, pendingUploads));
   }, [pendingUploads]);
 
+  useEffect(() => {
+    const result = saveLocalConsensusFeedback(window.localStorage, localFeedback);
+    setLocalFeedbackStorageError(result.ok ? '' : result.message);
+  }, [localFeedback]);
+
   const refreshMarketplace = async () => {
     const result = await loadMarketplace();
     setData(withPendingProducts(result.data, pendingUploads));
@@ -245,16 +275,11 @@ function App() {
   const selectedStore = getStore(data, selectedStoreId) || data.stores[0];
   const total = cartTotal(cart, data);
   const selectedProductCompletedOrderId = useMemo(
-    () =>
-      data.orders.find((order) =>
-        order.status === '已完成' && order.items.some((item) => item.productId === selectedProduct.id)
-      )?.id,
+    () => completedOrderIdForBuyerProduct(data.orders, currentUserKey, selectedProduct.id),
     [data.orders, selectedProduct.id]
   );
   const currentActor: ConsensusActor = useMemo(() => {
-    const completedOrderIds = data.orders
-      .filter((order) => order.status === '已完成')
-      .map((order) => order.id);
+    const completedOrderIds = completedOrdersForBuyer(data.orders, currentUserKey).map((order) => order.id);
 
     return {
       id: currentUserKey,
@@ -270,6 +295,10 @@ function App() {
       orderId: currentActor.completedOrderIds[0],
     }),
     [currentActor]
+  );
+  const currentUserOrders = useMemo(
+    () => data.orders.filter((order) => order.buyerKey === currentUserKey),
+    [data.orders]
   );
   const productConsensus = useMemo(
     () => evaluateConsensusAction(currentActor, { type: 'removal_vote', orderId: selectedProductCompletedOrderId }),
@@ -317,15 +346,40 @@ function App() {
     notify('已加入购物车');
   };
 
+  const rememberLocalFeedback = (input: {
+    evaluation: ConsensusEvaluation;
+    targetStoreId: string;
+    productId?: string;
+    reason: string;
+  }) => {
+    const feedback = createLocalConsensusFeedback({
+      actorKey: currentUserKey,
+      targetStoreId: input.targetStoreId,
+      productId: input.productId,
+      reason: input.reason,
+      evaluation: input.evaluation,
+    });
+    setLocalFeedback((items) => [feedback, ...items].slice(0, 50));
+  };
+
   const voteDown = async (productId: string) => {
     const evaluation = productId === selectedProduct.id
       ? productConsensus
       : evaluateConsensusAction(currentActor, { type: 'removal_vote' });
+    if (!canSubmitGovernanceToServer(evaluation)) {
+      const product = getProduct(data, productId);
+      rememberLocalFeedback({
+        evaluation,
+        targetStoreId: product?.storeId || selectedStore.id,
+        productId,
+        reason: '用户提交 0 权重普通反馈',
+      });
+      notify('已记录普通反馈：权重 0，未提交旧治理接口');
+      return;
+    }
     const result = await postMarketplaceAction(`/products/${productId}/reports`, {
       reporterKey: currentUserKey,
-      reason: evaluation.canAffectCoreReputation
-        ? '用户基于双锚共识发起治理下架'
-        : '用户提交 0 权重普通反馈',
+      reason: '用户基于双锚共识发起治理下架',
       consensus: {
         version: evaluation.version,
         governanceWeight: evaluation.governanceWeight,
@@ -350,12 +404,20 @@ function App() {
   };
 
   const submitComplaint = async () => {
+    if (!canSubmitGovernanceToServer(complaintConsensus)) {
+      rememberLocalFeedback({
+        evaluation: complaintConsensus,
+        targetStoreId: selectedStore.id,
+        productId: selectedProduct?.id,
+        reason: '商品描述与履约争议，先作为普通反馈留痕',
+      });
+      notify('投诉已记录为本机普通反馈：权重 0，未影响商户信誉');
+      return;
+    }
     const result = await postMarketplaceAction(`/sellers/${selectedStore.id}/complaints`, {
       complainantKey: currentUserKey,
       productId: selectedProduct?.id,
-      reason: complaintConsensus.canAffectCoreReputation
-        ? '商品描述与履约争议，按双锚共识进入治理'
-        : '商品描述与履约争议，先作为普通反馈留痕',
+      reason: '商品描述与履约争议，按双锚共识进入治理',
       consensus: {
         version: complaintConsensus.version,
         governanceWeight: complaintConsensus.governanceWeight,
@@ -384,6 +446,7 @@ function App() {
     }
     const result = await postMarketplaceAction('/orders', {
       productId: firstItem.productId,
+      buyerKey: currentUserKey,
       buyerContact: 'wechat:android-buyer-demo',
       buyerMessage: '请卖家联系我确认交易。',
     });
@@ -1286,6 +1349,32 @@ function App() {
           </span>
         </div>
         <small>评价别人，也会写入自己的履历；恶意投诉会降低后续共识权。</small>
+        {localFeedbackStorageError && <small>本机履历保存异常：{localFeedbackStorageError}</small>}
+      </section>
+      <section className="panel feedback-panel">
+        <div className="section-title">
+          <span>我的履历</span>
+          <small>{localFeedback.length} 条本机反馈</small>
+        </div>
+        {localFeedback.length === 0 ? (
+          <p>暂无本机反馈记录。</p>
+        ) : (
+          <div className="feedback-list">
+            {localFeedback.slice(0, 5).map((feedback) => {
+              const store = getStore(data, feedback.targetStoreId);
+              const product = feedback.productId ? getProduct(data, feedback.productId) : undefined;
+              return (
+                <article key={feedback.id}>
+                  <div>
+                    <strong>{feedback.actionType === 'removal_vote' ? '下架反馈' : '投诉反馈'}</strong>
+                    <span>{store?.name || feedback.targetStoreId}{product ? ` · ${product.title}` : ''}</span>
+                  </div>
+                  <small>权重 {formatGovernanceWeight(feedback.governanceWeight)} · {feedback.reason}</small>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
       <section className="panel">
         <div className="section-title">
@@ -1431,7 +1520,7 @@ function App() {
   const renderOrders = () => (
     <section className="panel full-panel">
       <HeaderBack title="订单" />
-      {data.orders.map((order) => (
+      {currentUserOrders.map((order) => (
         <article className="order-card" key={order.id}>
           <div className="section-title">
             <span>{order.id}</span>
@@ -1445,6 +1534,7 @@ function App() {
           <span>{order.createdAt}</span>
         </article>
       ))}
+      {currentUserOrders.length === 0 && <p className="chain-note">当前账号暂无订单记录。</p>}
     </section>
   );
 

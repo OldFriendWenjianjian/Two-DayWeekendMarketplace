@@ -61,6 +61,7 @@ export type CartItem = {
 
 export type Order = {
   id: string;
+  buyerKey?: string;
   status: '待付款' | '待发货' | '运输中' | '已完成' | '申诉中';
   items: CartItem[];
   total: number;

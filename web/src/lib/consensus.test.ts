@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canSubmitGovernanceToServer,
   evaluateConsensusAction,
   sumGovernanceWeight,
   type ConsensusActor,
@@ -60,6 +61,17 @@ describe('dual-anchor reputation consensus', () => {
     expect(witnessed.governanceWeight).toBe(1);
   });
 
+  it('does not count repeated witness signatures as a quorum', () => {
+    const result = evaluateConsensusAction(actor(), {
+      type: 'staked_complaint',
+      witnessSignatures: ['w1', 'w1', 'w1'],
+    });
+
+    expect(result.canAffectCoreReputation).toBe(false);
+    expect(result.hasResponsibilityAnchor).toBe(false);
+    expect(result.governanceWeight).toBe(0);
+  });
+
   it('keeps empty removal votes at zero even with ten thousand aged accounts', () => {
     const emptyVotes = Array.from({ length: 10000 }, (_, index) =>
       evaluateConsensusAction(
@@ -94,5 +106,16 @@ describe('dual-anchor reputation consensus', () => {
 
     expect(result.canAffectCoreReputation).toBe(false);
     expect(result.governanceWeight).toBe(0);
+  });
+
+  it('allows legacy governance endpoints only for non-zero consensus weight', () => {
+    const emptyVote = evaluateConsensusAction(actor(), { type: 'removal_vote' });
+    const anchoredVote = evaluateConsensusAction(
+      actor({ completedOrderIds: ['order-1'] }),
+      { type: 'removal_vote', orderId: 'order-1' }
+    );
+
+    expect(canSubmitGovernanceToServer(emptyVote)).toBe(false);
+    expect(canSubmitGovernanceToServer(anchoredVote)).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mockData } from './mockData';
-import { cartTotal, filterProducts } from './selectors';
+import { cartTotal, completedOrderIdForBuyerProduct, completedOrdersForBuyer, filterProducts } from './selectors';
 
 describe('marketplace selectors', () => {
   it('filters products by search query and category', () => {
@@ -18,5 +18,15 @@ describe('marketplace selectors', () => {
       mockData
     );
     expect(total).toBe(157);
+  });
+
+  it('uses only the current buyer completed orders as trade anchors', () => {
+    expect(completedOrdersForBuyer(mockData.orders, 'android-buyer-demo').map((order) => order.id)).toEqual([
+      'ORD-20260601-004',
+    ]);
+    expect(completedOrderIdForBuyerProduct(mockData.orders, 'android-buyer-demo', 'p-002')).toBe(
+      'ORD-20260601-004'
+    );
+    expect(completedOrderIdForBuyerProduct(mockData.orders, 'someone-else', 'p-002')).toBeUndefined();
   });
 });

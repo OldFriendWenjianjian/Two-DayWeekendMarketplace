@@ -1592,6 +1592,45 @@ code {
   font-size: 14px;
 }
 
+.feedback-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-panel p {
+  margin: 0;
+  color: #557069;
+  font-size: 13px;
+}
+
+.feedback-list {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-list article {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid rgba(31, 53, 47, 0.08);
+  border-radius: 8px;
+  background: #f8fbf9;
+}
+
+.feedback-list strong,
+.feedback-list span,
+.feedback-list small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.feedback-list span,
+.feedback-list small {
+  color: #557069;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .review {
   display: grid;
   gap: 5px;

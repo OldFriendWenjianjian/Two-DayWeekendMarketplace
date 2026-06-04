@@ -209,6 +209,7 @@ export const mockData: MarketplacePayload = {
   orders: [
     {
       id: 'ORD-20260602-001',
+      buyerKey: 'android-buyer-demo',
       status: '运输中',
       items: [{ productId: 'p-001', quantity: 2 }],
       total: 118,
@@ -216,6 +217,7 @@ export const mockData: MarketplacePayload = {
     },
     {
       id: 'ORD-20260601-004',
+      buyerKey: 'android-buyer-demo',
       status: '已完成',
       items: [
         { productId: 'p-002', quantity: 1 },
