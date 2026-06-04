@@ -141,7 +141,7 @@ class ServerMonitorApp:
             "connect": StringVar(value="未检查"),
             "downloads": StringVar(value="0"),
             "visitors": StringVar(value="0"),
-            "pressure": StringVar(value="0 req/min"),
+            "pressure": StringVar(value="0 monitor req/min"),
             "live": StringVar(value="0"),
             "ledger": StringVar(value="0"),
             "apk": StringVar(value="未知"),
@@ -188,9 +188,9 @@ class ServerMonitorApp:
         metric_frame.pack(fill=X, pady=(0, 8))
         metrics = [
             ("连通状态", "connect"),
-            ("本地估算访问", "visitors"),
-            ("下载探测次数", "downloads"),
-            ("关键压力", "pressure"),
+            ("本机商城探测", "visitors"),
+            ("本机下载探测", "downloads"),
+            ("本机探测压力", "pressure"),
             ("直播房间", "live"),
             ("账本高度", "ledger"),
             ("APK", "apk"),
@@ -200,6 +200,13 @@ class ServerMonitorApp:
             card.grid(row=0, column=index, padx=4, sticky="nsew")
             ttk.Label(card, textvariable=self.metric_vars[key], font=("Microsoft YaHei UI", 13, "bold")).pack(padx=10, pady=10)
             metric_frame.columnconfigure(index, weight=1)
+
+        ttk.Label(
+            outer,
+            text="提示：这些访问、下载、压力数字是本工具在本机发出的监控探测，不代表真实用户访问量。真实人数/下载次数需要读取服务器 access log 或专门 metrics 接口。",
+            foreground="#8a5a2b",
+            wraplength=980,
+        ).pack(fill=X, pady=(0, 8))
 
         body = ttk.PanedWindow(outer, orient="horizontal")
         body.pack(fill=BOTH, expand=True)
@@ -407,14 +414,14 @@ class ServerMonitorApp:
         self.metric_vars["connect"].set(connect)
         self.metric_vars["visitors"].set(str(self.state.observed_marketplace_loads))
         self.metric_vars["downloads"].set(str(self.state.observed_download_probes))
-        self.metric_vars["pressure"].set(f"{pressure:.1f} req/min")
+        self.metric_vars["pressure"].set(f"{pressure:.1f} monitor req/min")
         self.metric_vars["live"].set(str(self.state.live_room_count))
         self.metric_vars["ledger"].set(str(self.state.ledger_height))
         apk_mb = self.state.apk_file_size / 1024 / 1024
         self.metric_vars["apk"].set("可下载 %.2f MB" % apk_mb if self.state.apk_available else "未确认")
         self.summary.set(
             f"商品 {self.state.product_count} · 店铺 {self.state.store_count} · "
-            f"信令探测 {self.state.observed_signal_polls} · 请求 {total_requests} · 失败 {total_failures}"
+            f"信令探测 {self.state.observed_signal_polls} · 本机监控请求 {total_requests} · 失败 {total_failures}"
         )
 
     def log(self, text: str) -> None:
