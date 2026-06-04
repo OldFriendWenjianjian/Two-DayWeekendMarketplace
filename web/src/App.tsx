@@ -4,6 +4,7 @@ import {
   Camera,
   ChevronLeft,
   CheckCircle,
+  ChevronRight,
   CircleUserRound,
   CloudUpload,
   ClipboardList,
@@ -93,6 +94,7 @@ const coverTones: Array<{ id: CoverTone; label: string }> = [
 ];
 
 const currentUserKey = 'android-buyer-demo';
+const consensusAnnouncementVersion = 'dual-anchor-v1.1';
 
 function withPendingProducts(payload: MarketplacePayload, uploads: PendingProductUpload[]): MarketplacePayload {
   return {
@@ -206,6 +208,7 @@ function App() {
   const lastAutoRetryKeyRef = useRef('');
   const [tab, setTab] = useState<Tab>('home');
   const [screen, setScreen] = useState<Screen>('main');
+  const [showConsensusAnnouncement, setShowConsensusAnnouncement] = useState(true);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<ProductCategory | 'all'>('all');
   const [selectedProductId, setSelectedProductId] = useState('p-001');
@@ -760,7 +763,12 @@ function App() {
           <SearchBar />
           <ServerStatusPanel />
           <section className="policy-banner">
-            <strong>上架原则</strong>
+            <div className="policy-banner__head">
+              <strong>上架原则</strong>
+              <button onClick={() => setShowConsensusAnnouncement(true)}>
+                共识更新 <ChevronRight size={14} />
+              </button>
+            </div>
             <span>本超市只展示承诺双休、不强制加班公司的产品；不符合理念的商品可投诉，并按双锚共识进入治理。</span>
           </section>
           <section className="quick-grid">
@@ -1577,6 +1585,41 @@ function App() {
     </div>
   );
 
+  const ConsensusAnnouncement = () => (
+    <div className="announcement-overlay" role="presentation">
+      <section
+        className="announcement-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="consensus-announcement-title"
+      >
+        <div className="announcement-card__badge">
+          <ShieldCheck size={17} />
+          <span>{consensusAnnouncementVersion}</span>
+        </div>
+        <h2 id="consensus-announcement-title">双休超市共识系统已升级</h2>
+        <p>公平售货不是靠账号数量投票，而是靠真实交易、责任背书和可追溯履历。</p>
+        <div className="announcement-points">
+          <article>
+            <strong>双锚信誉共识</strong>
+            <span>真实交易锚或责任押注锚成立，才会影响商户核心信誉。</span>
+          </article>
+          <article>
+            <strong>空号权重为 0</strong>
+            <span>没有锚点的反馈只写入本机履历，不提交旧治理接口，不触发下架。</span>
+          </article>
+          <article>
+            <strong>评价也写自己的履历</strong>
+            <span>投诉、下架反馈、见证背书都会留下发起人记录，恶意行为会反噬共识权。</span>
+          </article>
+        </div>
+        <button className="primary-button" onClick={() => setShowConsensusAnnouncement(false)}>
+          <CheckCircle size={17} /> 我知道了，继续逛
+        </button>
+      </section>
+    </div>
+  );
+
   return (
     <div className="app-shell">
       <main className={screen === 'main' ? 'app-main app-main--tabs' : 'app-main'}>
@@ -1611,6 +1654,7 @@ function App() {
           <Bell size={16} /> {toast}
         </div>
       )}
+      {showConsensusAnnouncement && <ConsensusAnnouncement />}
     </div>
   );
 }

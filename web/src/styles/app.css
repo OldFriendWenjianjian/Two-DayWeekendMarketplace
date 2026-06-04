@@ -277,6 +277,27 @@ body {
   line-height: 1.55;
 }
 
+.policy-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.policy-banner__head button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(47, 143, 131, 0.12);
+  color: #226c62;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .dot {
   width: 8px;
   height: 8px;
@@ -1757,6 +1778,82 @@ code {
   color: white;
   font-weight: 800;
   box-shadow: 0 12px 30px rgba(31, 53, 47, 0.18);
+}
+
+.announcement-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 18px);
+  background: rgba(18, 38, 34, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.announcement-card {
+  width: min(100%, 430px);
+  max-height: min(92vh, 680px);
+  overflow: auto;
+  display: grid;
+  gap: 13px;
+  padding: 18px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f352f;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 28px 80px rgba(18, 38, 34, 0.32);
+}
+
+.announcement-card__badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f3fbf7;
+  color: #226c62;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.announcement-card h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.announcement-card p {
+  margin: 0;
+  color: #557069;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.announcement-points {
+  display: grid;
+  gap: 8px;
+}
+
+.announcement-points article {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border-radius: 8px;
+  background: #f8fbf9;
+  border: 1px solid rgba(31, 53, 47, 0.08);
+}
+
+.announcement-points strong {
+  font-size: 14px;
+}
+
+.announcement-points span {
+  color: #557069;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .empty {
