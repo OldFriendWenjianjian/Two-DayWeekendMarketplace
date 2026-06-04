@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">双休超市</string>
     <string name="app_name_cn">双休超市</string>
-    <string name="file_chooser_title">Select file or camera</string>
-    <string name="no_file_picker">No file picker is available on this device.</string>
+    <string name="file_chooser_title">选择图片</string>
+    <string name="no_file_picker">此设备没有可用的文件选择器。</string>
+    <string name="no_camera_app">此设备没有可用的相机应用。</string>
 </resources>

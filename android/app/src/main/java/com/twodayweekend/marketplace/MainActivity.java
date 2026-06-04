@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private Uri cameraCaptureUri;
     private PermissionRequest pendingWebPermissionRequest;
     private Intent pendingFileChooserIntent;
+    private boolean pendingDirectCameraCapture;
     private boolean localFallbackLoaded;
 
     @Override
@@ -135,7 +136,19 @@ public class MainActivity extends Activity {
 
         if (requestCode == REQUEST_CAMERA_CAPTURE_PERMISSION && filePathCallback != null) {
             Intent chooser = pendingFileChooserIntent;
+            boolean directCameraCapture = pendingDirectCameraCapture;
             pendingFileChooserIntent = null;
+            pendingDirectCameraCapture = false;
+
+            if (directCameraCapture) {
+                if (allPermissionsGranted(grantResults)) {
+                    openCameraCapture();
+                } else {
+                    cancelFileChooser();
+                }
+                return;
+            }
+
             if (allPermissionsGranted(grantResults) && chooser != null) {
                 Intent cameraIntent = createCameraIntent();
                 chooser.putExtra(
@@ -339,19 +352,37 @@ public class MainActivity extends Activity {
         try {
             startActivityForResult(chooserIntent, REQUEST_FILE_CHOOSER);
         } catch (ActivityNotFoundException exception) {
-            if (filePathCallback != null) {
-                filePathCallback.onReceiveValue(null);
-                filePathCallback = null;
-            }
+            cancelFileChooser();
             Toast.makeText(this, R.string.no_file_picker, Toast.LENGTH_SHORT).show();
         }
     }
 
-    private boolean shouldRequestCameraForFileChooser(WebChromeClient.FileChooserParams params) {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && params.isCaptureEnabled()
-                && acceptsImage(params)
-                && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED;
+    private void openCameraCapture() {
+        Intent cameraIntent = createCameraIntent();
+        if (cameraIntent == null) {
+            cancelFileChooser();
+            Toast.makeText(this, R.string.no_camera_app, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            startActivityForResult(cameraIntent, REQUEST_FILE_CHOOSER);
+        } catch (ActivityNotFoundException exception) {
+            cancelFileChooser();
+            Toast.makeText(this, R.string.no_camera_app, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void cancelFileChooser() {
+        if (filePathCallback != null) {
+            filePathCallback.onReceiveValue(null);
+            filePathCallback = null;
+        }
+        cameraCaptureUri = null;
+    }
+
+    private boolean shouldUseDirectCameraCapture(WebChromeClient.FileChooserParams params) {
+        return params.isCaptureEnabled() && acceptsImage(params);
     }
 
     private boolean acceptsImage(WebChromeClient.FileChooserParams params) {
@@ -438,6 +469,17 @@ public class MainActivity extends Activity {
             }
             filePathCallback = callback;
 
+            if (shouldUseDirectCameraCapture(fileChooserParams)) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                        && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    pendingDirectCameraCapture = true;
+                    requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_CAPTURE_PERMISSION);
+                    return true;
+                }
+                openCameraCapture();
+                return true;
+            }
+
             Intent contentIntent = fileChooserParams.createIntent();
             contentIntent.addCategory(Intent.CATEGORY_OPENABLE);
 
@@ -446,11 +488,6 @@ public class MainActivity extends Activity {
             Intent chooser = new Intent(Intent.ACTION_CHOOSER);
             chooser.putExtra(Intent.EXTRA_INTENT, contentIntent);
             chooser.putExtra(Intent.EXTRA_TITLE, getString(R.string.file_chooser_title));
-            if (shouldRequestCameraForFileChooser(fileChooserParams)) {
-                pendingFileChooserIntent = chooser;
-                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_CAPTURE_PERMISSION);
-                return true;
-            }
             chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, initialIntents);
             openFileChooser(chooser);
             return true;
