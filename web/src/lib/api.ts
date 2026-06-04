@@ -132,6 +132,24 @@ export function supportsWebRtc() {
   return typeof RTCPeerConnection !== 'undefined';
 }
 
+export function supportsMediaCapture() {
+  return Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
+export async function startHostCapture() {
+  if (!supportsMediaCapture()) {
+    throw new Error('当前 WebView/浏览器不支持摄像头采集，请确认使用最新版 Android WebView 或 HTTPS 页面。');
+  }
+  return navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: 'environment',
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+    audio: true,
+  });
+}
+
 export async function createViewerOffer(roomId: string) {
   if (!supportsWebRtc()) {
     return {

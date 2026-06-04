@@ -405,6 +405,51 @@ body {
   margin-top: 10px;
 }
 
+.host-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(47, 143, 131, 0.14);
+  border-radius: 8px;
+  background: #edf6f2;
+}
+
+.host-preview__video {
+  min-height: 168px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #173b38;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.host-preview__video video {
+  width: 100%;
+  height: 100%;
+  min-height: 168px;
+  object-fit: cover;
+  display: block;
+}
+
+.host-preview__body {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+.host-preview__body span {
+  color: #557069;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .live-card {
   overflow: hidden;
   display: grid;
@@ -1275,6 +1320,7 @@ code {
   .spec-grid,
   .store-stats,
   .two-column-fields,
+  .host-preview,
   .listing-preview-card {
     grid-template-columns: 1fr;
   }
