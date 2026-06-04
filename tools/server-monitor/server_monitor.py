@@ -12,7 +12,7 @@ from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, X, StringVar, Tk, filedialog, messagebox, ttk
 
 
-APP_NAME = "双休超市服务器监测"
+APP_NAME = "Two-Day Weekend Marketplace Server Monitor"
 DEFAULT_CONFIG = {
     "server_ipv6": "2402:4e00:c013:8600:5602:3dc2:a2d0:0",
     "scheme": "http",
