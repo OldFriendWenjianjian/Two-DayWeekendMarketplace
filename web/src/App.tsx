@@ -12,6 +12,7 @@ import {
   ListFilter,
   PackagePlus,
   Palette,
+  Radio,
   RefreshCw,
   Search,
   Settings,
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LedgerTimeline } from './components/LedgerTimeline';
+import { LiveFeed } from './components/LiveFeed';
 import { LivePanel } from './components/LivePanel';
 import { ProductCard } from './components/ProductCard';
 import { apiPresets, getApiBase, loadMarketplace, postMarketplaceAction, resetApiBase, setApiBase } from './lib/api';
@@ -43,13 +45,14 @@ import {
 import { cartTotal, filterProducts, formatCurrency, getProduct, getStore, storeProducts } from './lib/selectors';
 import type { ApiHealth, CartItem, MarketplacePayload, ProductCategory } from './lib/types';
 
-type Tab = 'home' | 'category' | 'cart' | 'seller' | 'profile';
+type Tab = 'home' | 'category' | 'live' | 'cart' | 'seller' | 'profile';
 type Screen = 'main' | 'product' | 'store' | 'orders' | 'complaints' | 'settings' | 'listing';
 type CoverTone = 'clean' | 'warm' | 'fresh';
 
 const tabItems: Array<{ id: Tab; label: string; icon: typeof Home }> = [
   { id: 'home', label: '发现', icon: Home },
   { id: 'category', label: '分类', icon: Boxes },
+  { id: 'live', label: '直播', icon: Radio },
   { id: 'cart', label: '购物车', icon: ShoppingCart },
   { id: 'seller', label: '卖家', icon: StoreIcon },
   { id: 'profile', label: '我的', icon: CircleUserRound },
@@ -179,6 +182,7 @@ function App() {
   const [category, setCategory] = useState<ProductCategory | 'all'>('all');
   const [selectedProductId, setSelectedProductId] = useState('p-001');
   const [selectedStoreId, setSelectedStoreId] = useState('store-green-001');
+  const [selectedLiveRoomId, setSelectedLiveRoomId] = useState('');
   const [cart, setCart] = useState<CartItem[]>([
     { productId: 'p-001', quantity: 1 },
     { productId: 'p-003', quantity: 1 },
@@ -254,6 +258,12 @@ function App() {
   const openStore = (id: string) => {
     setSelectedStoreId(id);
     setScreen('store');
+  };
+
+  const openLiveRoom = (roomId: string) => {
+    setSelectedLiveRoomId(roomId);
+    setTab('live');
+    setScreen('main');
   };
 
   const addToCart = (productId: string) => {
@@ -635,7 +645,7 @@ function App() {
               <Flag size={19} /> 投诉
             </button>
           </section>
-          <LivePanel rooms={data.liveRooms} stores={data.stores} onChanged={refreshMarketplace} />
+          <LivePanel rooms={data.liveRooms} stores={data.stores} onChanged={refreshMarketplace} onOpenRoom={openLiveRoom} />
           <ProductSection title="发现好物" products={products} />
         </>
       );
@@ -662,6 +672,19 @@ function App() {
           </section>
           <ProductSection title="商品列表" products={products} />
         </>
+      );
+    }
+
+    if (tab === 'live') {
+      return (
+        <LiveFeed
+          rooms={data.liveRooms}
+          stores={data.stores}
+          products={data.products}
+          initialRoomId={selectedLiveRoomId}
+          onOpenStore={openStore}
+          onOpenProduct={openProduct}
+        />
       );
     }
 
@@ -1280,6 +1303,7 @@ function App() {
         stores={data.stores}
         selectedStoreId={selectedStore.id}
         onChanged={refreshMarketplace}
+        onOpenRoom={openLiveRoom}
       />
       <ProductSection title="店铺商品" products={storeProducts(data, selectedStore)} />
       <section className="panel">
@@ -1361,7 +1385,11 @@ function App() {
         {screen === 'listing' && renderListing()}
       </main>
       {screen === 'main' && (
-        <nav className="bottom-nav" aria-label="主导航">
+        <nav
+          className="bottom-nav"
+          aria-label="主导航"
+          style={{ '--nav-count': tabItems.length } as React.CSSProperties}
+        >
           {tabItems.map((item) => {
             const Icon = item.icon;
             return (

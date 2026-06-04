@@ -1,12 +1,12 @@
 import { Radio, Send, Users, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
-  createViewerOffer,
   postMarketplaceAction,
   startHostCapture,
   supportsMediaCapture,
   supportsWebRtc,
 } from '../lib/api';
+import { P2PHostSession } from '../lib/p2pLive';
 import type { LiveRoom, Store } from '../lib/types';
 
 type LivePanelProps = {
@@ -14,14 +14,17 @@ type LivePanelProps = {
   stores: Store[];
   selectedStoreId?: string;
   onChanged?: () => void;
+  onOpenRoom?: (roomId: string) => void;
 };
 
-export function LivePanel({ rooms, stores, selectedStoreId, onChanged }: LivePanelProps) {
+export function LivePanel({ rooms, stores, selectedStoreId, onChanged, onOpenRoom }: LivePanelProps) {
   const [offer, setOffer] = useState('');
   const [message, setMessage] = useState('');
   const [roomStatus, setRoomStatus] = useState('未登记');
   const [hostStream, setHostStream] = useState<MediaStream | null>(null);
   const [hostPreviewMessage, setHostPreviewMessage] = useState('');
+  const [connectedViewers, setConnectedViewers] = useState(0);
+  const hostSessionRef = useRef<P2PHostSession | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const visibleRooms = selectedStoreId ? rooms.filter((room) => room.storeId === selectedStoreId) : rooms;
 
@@ -33,15 +36,20 @@ export function LivePanel({ rooms, stores, selectedStoreId, onChanged }: LivePan
 
   useEffect(
     () => () => {
+      hostSessionRef.current?.close();
       hostStream?.getTracks().forEach((track) => track.stop());
     },
     [hostStream]
   );
 
   const joinRoom = async (room: LiveRoom) => {
-    const result = await createViewerOffer(room.id);
-    setOffer(result.offer);
-    setMessage(result.message);
+    setOffer('');
+    if (room.status !== 'live') {
+      setMessage(`${room.title} 还没有开播，暂时不能 P2P 观看。`);
+      return;
+    }
+    onOpenRoom?.(room.id);
+    setMessage(`${room.title} 已进入直播流。`);
   };
 
   const registerLive = async () => {
@@ -84,12 +92,36 @@ export function LivePanel({ rooms, stores, selectedStoreId, onChanged }: LivePan
     );
     setRoomStatus(result.message);
     setHostPreviewMessage(result.mode === 'mock' ? '本地预览已开启，后端不可用时仅做演示登记' : '商户摄像头预览已开启，直播房间已登记');
-    if (result.mode === 'remote') onChanged?.();
+    if (result.mode === 'remote') {
+      const room: LiveRoom = {
+        id: `room-${sellerId}`,
+        storeId: sellerId,
+        title: '手机端商户开播登记',
+        cover: 'linear-gradient(135deg, #2f8f83, #4f7fcf)',
+        status: 'live',
+        startedAt: new Date().toISOString(),
+        viewers: 1,
+        signalingChannel: `/api/signaling/rooms/room-${sellerId}`,
+        hostPeerId: `merchant-${sellerId}`,
+      };
+      hostSessionRef.current?.close();
+      hostSessionRef.current = new P2PHostSession(room, stream, {
+        onUpdate: (update) => {
+          setHostPreviewMessage(update.message);
+          if (typeof update.viewerCount === 'number') setConnectedViewers(update.viewerCount);
+        },
+      });
+      hostSessionRef.current.start();
+      onChanged?.();
+    }
   };
 
   const stopHostCapture = () => {
+    hostSessionRef.current?.close();
+    hostSessionRef.current = null;
     hostStream?.getTracks().forEach((track) => track.stop());
     setHostStream(null);
+    setConnectedViewers(0);
     setHostPreviewMessage('摄像头已关闭');
   };
 
@@ -119,6 +151,7 @@ export function LivePanel({ rooms, stores, selectedStoreId, onChanged }: LivePan
           <div className="host-preview__body">
             <strong>{hostStream ? '商户直播预览中' : '商户直播预览'}</strong>
             <span>{hostPreviewMessage || '点击开播后会在这里显示本机摄像头画面。'}</span>
+            {hostStream && <span>{connectedViewers} 位观众 P2P 直连</span>}
             {hostStream && (
               <button className="soft-button" onClick={stopHostCapture}>
                 关闭摄像头
@@ -142,7 +175,7 @@ export function LivePanel({ rooms, stores, selectedStoreId, onChanged }: LivePan
                   <Users size={14} /> {room.viewers} 人
                 </span>
                 <button className="primary-button" onClick={() => joinRoom(room)}>
-                  <Send size={16} /> 生成观看信令
+                  <Send size={16} /> {room.status === 'live' ? '去直播流观看' : '查看预约'}
                 </button>
               </div>
             </article>

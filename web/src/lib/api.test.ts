@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { postMarketplaceAction } from './api';
+import { fetchSignalMessages, postMarketplaceAction, postSignalMessage } from './api';
 
 describe('marketplace API actions', () => {
   beforeEach(() => {
@@ -57,5 +57,56 @@ describe('marketplace API actions', () => {
 
     expect(result.ok).toBe(true);
     expect(result.mode).toBe('mock');
+  });
+
+  it('posts and fetches P2P signaling messages', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messageId: 'sig-1' }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            messages: [
+              {
+                messageId: 'sig-2',
+                roomId: 'room-a',
+                fromPeer: 'merchant-a',
+                toPeer: 'viewer-a',
+                type: 'host-answer',
+                payload: { ok: true },
+                createdAt: '2026-06-04T08:00:00.000Z',
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postSignalMessage('room-a', {
+      fromPeer: 'viewer-a',
+      toPeer: 'merchant-a',
+      type: 'viewer-offer',
+      payload: { offer: { type: 'offer' } },
+    });
+    const result = await fetchSignalMessages('room-a', 'viewer-a', '2026-06-04T07:59:00.000Z');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://api.example.test/shc-20260520-a1faaf/weekend-marketplace/api/signaling/rooms/room-a/messages',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      '/api/signaling/rooms/room-a/messages?peer=viewer-a&since=2026-06-04T07%3A59%3A00.000Z'
+    );
+    expect(result.messages[0].type).toBe('host-answer');
   });
 });

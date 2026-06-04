@@ -17,6 +17,18 @@ type MarketplaceActionResult = {
   data?: unknown;
 };
 
+export type SignalMessageType = 'viewer-offer' | 'host-answer' | 'viewer-ice' | 'host-ice' | 'viewer-leave';
+
+export type SignalMessage = {
+  messageId: string;
+  roomId: string;
+  fromPeer: string;
+  toPeer?: string;
+  type: SignalMessageType;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
 const withTimeout = async (url: string, init?: RequestInit, timeoutMs = 2500) => {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -175,4 +187,44 @@ export async function createViewerOffer(roomId: string) {
     offer: offer.sdp || '',
     message: '已生成观众端 SDP Offer，可通过信令通道发送给商户主播',
   };
+}
+
+export async function postSignalMessage(
+  roomId: string,
+  message: {
+    fromPeer: string;
+    toPeer?: string;
+    type: SignalMessageType;
+    payload: Record<string, unknown>;
+  }
+) {
+  return postMarketplaceAction(`/signaling/rooms/${encodeURIComponent(roomId)}/messages`, message);
+}
+
+export async function fetchSignalMessages(roomId: string, peer: string, since?: string) {
+  const apiBase = getApiBase();
+  const params = new URLSearchParams({ peer });
+  if (since) params.set('since', since);
+  try {
+    const response = await withTimeout(
+      `${apiBase}/signaling/rooms/${encodeURIComponent(roomId)}/messages?${params.toString()}`,
+      undefined,
+      5000
+    );
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as { messages?: SignalMessage[] };
+    return {
+      ok: true,
+      mode: 'remote' as const,
+      messages: Array.isArray(data.messages) ? data.messages : [],
+      message: '信令已同步',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      mode: 'mock' as const,
+      messages: [] as SignalMessage[],
+      message: error instanceof Error ? error.message : '信令服务器不可用',
+    };
+  }
 }
