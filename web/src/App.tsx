@@ -66,7 +66,8 @@ import {
   getStore,
   storeProducts,
 } from './lib/selectors';
-import type { ApiHealth, CartItem, MarketplacePayload, ProductCategory } from './lib/types';
+import { getStoreVerificationInfo, weekendVerificationGuide } from './lib/weekendVerification';
+import type { ApiHealth, CartItem, MarketplacePayload, ProductCategory, Store } from './lib/types';
 
 type Tab = 'home' | 'category' | 'live' | 'cart' | 'seller' | 'profile';
 type Screen = 'main' | 'product' | 'store' | 'orders' | 'complaints' | 'settings' | 'listing';
@@ -95,6 +96,25 @@ const coverTones: Array<{ id: CoverTone; label: string }> = [
 
 const currentUserKey = 'android-buyer-demo';
 const consensusAnnouncementVersion = 'dual-anchor-v1.1';
+
+const publicStoreStatusLabel = (status?: Store['status']) => {
+  if (status === 'restricted') return '受限';
+  if (status === 'pending') return '待复核';
+  return '正常';
+};
+
+function VerificationBadge({ store, compact = false }: { store?: Store; compact?: boolean }) {
+  const verification = getStoreVerificationInfo(store);
+  return (
+    <span
+      className={`verification-badge verification-badge--${verification.tone}${
+        compact ? ' verification-badge--compact' : ''
+      }`}
+    >
+      {compact ? verification.level : `${verification.code} ${verification.level}`}
+    </span>
+  );
+}
 
 function withPendingProducts(payload: MarketplacePayload, uploads: PendingProductUpload[]): MarketplacePayload {
   return {
@@ -1036,6 +1056,22 @@ function App() {
         </div>
         <p className="chain-note">上架商品有独立页面，可上传多张图片、生成双休理念封面，并预览详情页效果。普通商品资料不进入账本。</p>
       </section>
+      <section className="panel verification-guide-panel">
+        <div className="section-title">
+          <span>双休认证等级</span>
+          <ShieldCheck size={18} />
+        </div>
+        <div className="verification-level-grid">
+          {weekendVerificationGuide.map((item) => (
+            <article className={`verification-level-row verification-level-row--${item.tone}`} key={item.level}>
+              <div>
+                <strong>{item.code} {item.level}</strong>
+                <span>{item.summary}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
       <section className="store-list">
         {data.stores.map((store) => (
           <button className="store-row" key={store.id} onClick={() => openStore(store.id)}>
@@ -1043,6 +1079,7 @@ function App() {
             <span>
               <strong>{store.name}</strong>
               <small>{store.uniqueChainId} · 信誉 {store.reputation}</small>
+              <VerificationBadge store={store} compact />
             </span>
           </button>
         ))}
@@ -1398,6 +1435,8 @@ function App() {
     const productImages = getProductImages(selectedProduct);
     const detailCover = productImages[selectedDetailImage] || getProductCover(selectedProduct);
     const detailHasPhoto = isRasterImageSource(detailCover);
+    const selectedProductStore = getStore(data, selectedProduct.storeId);
+    const selectedProductVerification = getStoreVerificationInfo(selectedProductStore);
 
     return (
     <article className="detail">
@@ -1429,9 +1468,16 @@ function App() {
         <div className="detail__price">{formatCurrency(selectedProduct.price)}</div>
         <h2>{selectedProduct.title}</h2>
         <button className="store-link" onClick={() => openStore(selectedProduct.storeId)}>
-          <span className="avatar">{getStore(data, selectedProduct.storeId)?.avatar}</span>
-          {getStore(data, selectedProduct.storeId)?.name}
+          <span className="avatar">{selectedProductStore?.avatar}</span>
+          {selectedProductStore?.name}
         </button>
+        <section className={`verification-summary verification-summary--${selectedProductVerification.tone}`}>
+          <div className="verification-summary__head">
+            <strong>双休认证</strong>
+            <VerificationBadge store={selectedProductStore} />
+          </div>
+          <span>{selectedProductVerification.summary}</span>
+        </section>
         <div className="tag-row">
           {selectedProduct.tags.map((tag) => (
             <span className="tag" key={tag}>{tag}</span>
@@ -1492,38 +1538,54 @@ function App() {
     );
   };
 
-  const renderStore = () => (
-    <>
-      <section className="store-hero" style={{ background: selectedStore.banner }}>
-        <button className="back-button" onClick={() => setScreen('main')} aria-label="返回">
-          <ChevronLeft size={22} />
-        </button>
-        <div className="avatar avatar--large">{selectedStore.avatar}</div>
-        <h2>{selectedStore.name}</h2>
-        <span>{selectedStore.uniqueChainId}</span>
-      </section>
-      <section className="panel">
-        <div className="store-stats">
-          <span><strong>{selectedStore.reputation}</strong>信誉</span>
-          <span><strong>{selectedStore.followers}</strong>关注</span>
-          <span><strong>{selectedStore.status}</strong>状态</span>
-        </div>
-        <p className="chain-note">店家 ID 是账本身份锚点；双休不加班承诺、投诉、评价、治理下架等信誉事件不可篡改展示。</p>
-      </section>
-      <LivePanel
-        rooms={data.liveRooms}
-        stores={data.stores}
-        selectedStoreId={selectedStore.id}
-        onChanged={refreshMarketplace}
-        onOpenRoom={openLiveRoom}
-      />
-      <ProductSection title="店铺商品" products={storeProducts(data, selectedStore)} />
-      <section className="panel">
-        <div className="section-title"><span>店铺账本</span><ShieldCheck size={18} /></div>
-        <LedgerTimeline events={data.ledgerEvents.filter((event) => event.storeId === selectedStore.id)} />
-      </section>
-    </>
-  );
+  const renderStore = () => {
+    const verification = getStoreVerificationInfo(selectedStore);
+
+    return (
+      <>
+        <section className="store-hero" style={{ background: selectedStore.banner }}>
+          <button className="back-button" onClick={() => setScreen('main')} aria-label="返回">
+            <ChevronLeft size={22} />
+          </button>
+          <div className="avatar avatar--large">{selectedStore.avatar}</div>
+          <h2>{selectedStore.name}</h2>
+          <span>{selectedStore.uniqueChainId}</span>
+        </section>
+        <section className="panel">
+          <div className="store-stats">
+            <span><strong>{selectedStore.reputation}</strong>信誉</span>
+            <span><strong>{selectedStore.followers}</strong>关注</span>
+            <span><strong>{publicStoreStatusLabel(selectedStore.status)}</strong>状态</span>
+          </div>
+          <section className={`verification-summary verification-summary--${verification.tone}`}>
+            <div className="verification-summary__head">
+              <strong>双休认证</strong>
+              <VerificationBadge store={selectedStore} />
+            </div>
+            <span>{verification.summary}</span>
+          </section>
+          <div className="verification-proof-grid">
+            <span><strong>承诺范围</strong>{selectedStore.laborPolicy || '双休不加班'}</span>
+            <span><strong>身份锚点</strong>店家 ID 全局唯一</span>
+            <span><strong>员工保护</strong>公开证据不暴露员工身份</span>
+          </div>
+          <p className="chain-note">店家 ID、认证变更、投诉、评价、治理下架和恢复事件进入签名账本；普通商品资料不写入账本。</p>
+        </section>
+        <LivePanel
+          rooms={data.liveRooms}
+          stores={data.stores}
+          selectedStoreId={selectedStore.id}
+          onChanged={refreshMarketplace}
+          onOpenRoom={openLiveRoom}
+        />
+        <ProductSection title="店铺商品" products={storeProducts(data, selectedStore)} />
+        <section className="panel">
+          <div className="section-title"><span>店铺账本</span><ShieldCheck size={18} /></div>
+          <LedgerTimeline events={data.ledgerEvents.filter((event) => event.storeId === selectedStore.id)} />
+        </section>
+      </>
+    );
+  };
 
   const renderOrders = () => (
     <section className="panel full-panel">

@@ -1,5 +1,7 @@
 export type ProductCategory = 'fresh' | 'craft' | 'digital' | 'home' | 'fashion' | 'service';
 
+export type WeekendVerificationLevel = '已承诺' | '材料核验' | '员工确认' | '持续核验' | '争议中' | '已撤销';
+
 export type Product = {
   id: string;
   storeId: string;
@@ -29,6 +31,10 @@ export type Store = {
   liveId?: string;
   status: 'verified' | 'pending' | 'restricted';
   joinedAt: string;
+  laborPolicy?: string;
+  noOvertimePledge?: boolean;
+  verificationLevel?: WeekendVerificationLevel | string;
+  verificationSummary?: string;
 };
 
 export type LedgerEvent = {

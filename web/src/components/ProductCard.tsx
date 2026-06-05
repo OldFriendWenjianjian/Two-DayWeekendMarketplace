@@ -2,6 +2,7 @@ import { ShoppingBag, Star } from 'lucide-react';
 import type { Product, Store } from '../lib/types';
 import { formatCurrency } from '../lib/selectors';
 import { getProductCover, isRasterImageSource, visualBackgroundStyle } from '../lib/images';
+import { getStoreVerificationInfo } from '../lib/weekendVerification';
 
 type ProductCardProps = {
   product: Product;
@@ -13,6 +14,7 @@ type ProductCardProps = {
 export function ProductCard({ product, store, onOpen, onAdd }: ProductCardProps) {
   const cover = getProductCover(product);
   const hasPhoto = isRasterImageSource(cover);
+  const verification = getStoreVerificationInfo(store);
 
   return (
     <article className="product-card">
@@ -27,7 +29,12 @@ export function ProductCard({ product, store, onOpen, onAdd }: ProductCardProps)
         <button className="text-button product-card__title" onClick={() => onOpen(product.id)}>
           {product.title}
         </button>
-        <div className="product-card__store">{store?.name || '未知店铺'}</div>
+        <div className="product-card__store">
+          <span>{store?.name || '未知店铺'}</span>
+          <span className={`verification-badge verification-badge--${verification.tone}`}>
+            {verification.level}
+          </span>
+        </div>
         <div className="tag-row">
           {product.tags.slice(0, 2).map((tag) => (
             <span className="tag" key={tag}>
