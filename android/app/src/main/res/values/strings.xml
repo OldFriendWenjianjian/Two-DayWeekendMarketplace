@@ -5,4 +5,17 @@
     <string name="file_chooser_title">选择图片</string>
     <string name="no_file_picker">此设备没有可用的文件选择器。</string>
     <string name="no_camera_app">此设备没有可用的相机应用。</string>
+    <string name="update_dialog_title">发现双休超市新版本</string>
+    <string name="update_dialog_message">版本：%1$s\n大小：%2$s\n下载后会自动校验 SHA256，通过后打开系统安装引导。</string>
+    <string name="update_dialog_sha256">SHA256：%1$s</string>
+    <string name="update_download_install">下载并安装</string>
+    <string name="update_later">稍后</string>
+    <string name="update_exit_app">退出应用</string>
+    <string name="update_download_started">开始下载 APK，完成后会校验 SHA256。</string>
+    <string name="update_download_failed">APK 下载失败，请检查服务器连接后重试。</string>
+    <string name="update_checksum_failed">APK 校验失败，已取消安装。实际 SHA256 开头：%1$s</string>
+    <string name="update_allow_unknown_sources">请允许双休超市安装未知来源应用，返回后会继续安装引导。</string>
+    <string name="update_install_permission_denied">尚未允许安装未知来源应用，请授权后重新点击下载并安装。</string>
+    <string name="update_no_installer">此设备没有可用的 APK 安装器。</string>
+    <string name="update_size_unknown">未知大小</string>
 </resources>
