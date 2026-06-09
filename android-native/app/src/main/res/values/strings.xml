@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">双休超市</string>
+    <string name="file_provider_authority_suffix">.fileprovider</string>
+</resources>

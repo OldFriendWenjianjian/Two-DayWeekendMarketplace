@@ -119,7 +119,8 @@ if maliciousActionCount >= maliciousZeroAt:
 
 - `server/`：Node 后端、发现服务器、信誉账本、订单、双锚治理下架、直播信令。
 - `web/`：移动优先商城前端/PWA，会被 Android WebView 加载。
-- `android/`：Android WebView 壳，负责权限、媒体采集、文件选择、图标与 APK。
+- `android/`：旧 Android WebView 壳，负责兼容当前 H5 商城。
+- `android-native/`：新原生 Android 项目，推进签名动作凭证、离线队列、原生拍照、直播登记、通知和 APK 更新；关键动作明确区分“服务器确认 / 待同步 / 本地草稿”。契约见 [签名动作凭证契约](docs/signed-action-credential-contract.md)。
 - `assets/branding/`：商城图标、宣传海报、应用商店宣传图。
 - `deploy/`：服务器部署脚本和 systemd/nginx 辅助配置。
 - `scripts/`：本地构建、回归测试、资产生成脚本。
@@ -134,8 +135,9 @@ if maliciousActionCount >= maliciousZeroAt:
 
 1. `server` 提供可持久化 API，并能验证信誉账本 hash 链。
 2. `web` 在后端在线/离线 mock 两种状态下均可演示商城流程。
-3. `android` 能打出 APK，并默认连接发现服务器。
-4. 回归测试覆盖：店家唯一性、账本不可篡改、商品上架可见、订单创建、双锚治理下架、直播发现、下载页、Web 构建、Android 构建。
+3. `android` 能打出 WebView 壳 APK，并默认连接发现服务器。
+4. `android-native` 能打出原生 APK，关键动作生成 `actionCredential`，服务器未确认时进入待同步队列。
+5. 回归测试覆盖：店家唯一性、账本不可篡改、商品上架可见、订单创建、双锚治理下架、直播发现、下载页、Web 构建、Android 构建。
 
 ## 验证与本地产物
 
@@ -146,6 +148,7 @@ pwsh -NoProfile -File scripts\regression.ps1
 运行回归后会在本机生成以下产物，它们会被 `.gitignore` 排除，不进入开源仓库：
 
 - APK：`android/app/build/outputs/apk/debug/app-debug.apk`
+- 原生版 APK：`android-native/app/build/outputs/apk/debug/app-debug.apk`
 - 下载目录 APK：`server/public/download/two-day-weekend-marketplace.apk`
 - 图标：`assets/branding/icon-1024.png`
 - 宣传海报：`assets/branding/poster-1080x1920.png`
