@@ -145,6 +145,12 @@ if maliciousActionCount >= maliciousZeroAt:
 pwsh -NoProfile -File scripts\regression.ps1
 ```
 
+部署后验收公网 IPv6、APK 哈希、包名版本、账本健康和关键动作强校验：
+
+```powershell
+pwsh -NoProfile -File scripts\verify-release.ps1
+```
+
 运行回归后会在本机生成以下产物，它们会被 `.gitignore` 排除，不进入开源仓库：
 
 - APK：`android/app/build/outputs/apk/debug/app-debug.apk`
