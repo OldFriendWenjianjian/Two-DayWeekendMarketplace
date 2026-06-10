@@ -9,7 +9,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "assets" / "branding"
 WEB_PUBLIC = ROOT / "web" / "public"
-ANDROID_RES = ROOT / "android" / "app" / "src" / "main" / "res"
+ANDROID_RES_DIRS = [
+    ROOT / "android" / "app" / "src" / "main" / "res",
+    ROOT / "android-native" / "app" / "src" / "main" / "res",
+]
 
 
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -227,8 +230,6 @@ def export_web_icons(icon_path: Path):
 
 
 def export_android_icons(icon_path: Path):
-    if not ANDROID_RES.exists():
-        return
     icon = Image.open(icon_path).convert("RGBA")
     launcher_sizes = {
         "mipmap-mdpi": 48,
@@ -244,15 +245,18 @@ def export_android_icons(icon_path: Path):
         "mipmap-xxhdpi": 324,
         "mipmap-xxxhdpi": 432,
     }
-    for directory, size in launcher_sizes.items():
-        target_dir = ANDROID_RES / directory
-        target_dir.mkdir(parents=True, exist_ok=True)
-        icon.resize((size, size), Image.Resampling.LANCZOS).save(target_dir / "ic_launcher.png")
-        icon.resize((size, size), Image.Resampling.LANCZOS).save(target_dir / "ic_launcher_round.png")
-    for directory, size in foreground_sizes.items():
-        target_dir = ANDROID_RES / directory
-        target_dir.mkdir(parents=True, exist_ok=True)
-        icon.resize((size, size), Image.Resampling.LANCZOS).save(target_dir / "ic_launcher_foreground.png")
+    for res_dir in ANDROID_RES_DIRS:
+        if not res_dir.exists():
+            continue
+        for directory, size in launcher_sizes.items():
+            target_dir = res_dir / directory
+            target_dir.mkdir(parents=True, exist_ok=True)
+            icon.resize((size, size), Image.Resampling.LANCZOS).save(target_dir / "ic_launcher.png")
+            icon.resize((size, size), Image.Resampling.LANCZOS).save(target_dir / "ic_launcher_round.png")
+        for directory, size in foreground_sizes.items():
+            target_dir = res_dir / directory
+            target_dir.mkdir(parents=True, exist_ok=True)
+            icon.resize((size, size), Image.Resampling.LANCZOS).save(target_dir / "ic_launcher_foreground.png")
 
 
 if __name__ == "__main__":

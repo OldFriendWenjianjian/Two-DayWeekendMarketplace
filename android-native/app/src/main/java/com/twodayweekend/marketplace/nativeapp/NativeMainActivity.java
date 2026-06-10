@@ -9,7 +9,11 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -37,6 +41,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -49,16 +54,30 @@ public class NativeMainActivity extends Activity {
     private static final int REQ_NOTIFY = 102;
     private static final int REQ_INSTALL = 103;
     private static final String CHANNEL_SYNC = "native_sync";
+    private static final int COLOR_BACKGROUND = Color.rgb(243, 248, 246);
+    private static final int COLOR_SURFACE = Color.WHITE;
+    private static final int COLOR_INK = Color.rgb(18, 45, 50);
+    private static final int COLOR_MUTED = Color.rgb(91, 111, 118);
+    private static final int COLOR_BRAND = Color.rgb(17, 143, 128);
+    private static final int COLOR_BRAND_DARK = Color.rgb(13, 81, 80);
+    private static final int COLOR_CORAL = Color.rgb(255, 112, 88);
+    private static final int COLOR_AMBER = Color.rgb(255, 195, 68);
+    private static final int COLOR_BLUE = Color.rgb(38, 99, 178);
+    private static final int COLOR_BORDER = Color.rgb(215, 231, 226);
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final List<Button> navButtons = new ArrayList<>();
     private ServerApi api;
     private CredentialManager credentials;
     private LocalStore store;
     private LinearLayout content;
     private TextView status;
     private TextView actor;
+    private TextView listingPhotoStatus;
+    private ImageView listingPhotoPreview;
     private JSONArray latestProducts = new JSONArray();
     private String serverHealthText = "尚未检测";
+    private String activeTab = "home";
     private Uri pendingPhotoUri;
     private String pendingPhotoPath = "";
     private String pendingPhotoDataUri = "";
@@ -92,17 +111,24 @@ public class NativeMainActivity extends Activity {
                 executor.execute(() -> {
                     try {
                         pendingPhotoDataUri = imageDataUri(pendingPhotoUri);
-                        postStatus("拍照完成，图片已加入上架草稿");
+                        runOnUiThread(() -> {
+                            updateListingPhotoPreview();
+                            postStatus("拍照完成，图片已加入上架草稿");
+                        });
                     } catch (Exception error) {
                         pendingPhotoUri = null;
                         pendingPhotoDataUri = "";
-                        postStatus("图片读取失败：" + error.getMessage());
+                        runOnUiThread(() -> {
+                            updateListingPhotoPreview();
+                            postStatus("图片读取失败：" + error.getMessage());
+                        });
                     }
                 });
             } else {
                 pendingPhotoUri = null;
                 pendingPhotoPath = "";
                 pendingPhotoDataUri = "";
+                updateListingPhotoPreview();
             }
         }
     }
@@ -124,37 +150,40 @@ public class NativeMainActivity extends Activity {
     private View buildRoot() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(248, 251, 249));
+        root.setBackgroundColor(COLOR_BACKGROUND);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(16), dp(14), dp(16), dp(10));
-        header.setBackgroundColor(Color.WHITE);
-        TextView title = text("双休超市", 22, true);
-        TextView subtitle = text("关键动作必须区分：服务器确认 / 待同步 / 本地演示", 13, false);
-        status = text("正在初始化", 13, false);
-        actor = text("actor: ...", 12, false);
+        header.setPadding(dp(18), dp(18), dp(18), dp(14));
+        header.setBackground(gradient(COLOR_BRAND_DARK, COLOR_BRAND, 0));
+        TextView title = textColor("双休超市", 26, true, Color.WHITE);
+        TextView subtitle = textColor("只上架双休不加班公司的产品", 14, true, Color.rgb(222, 255, 249));
+        TextView principle = textColor("服务器确认、签名凭证、待同步队列都必须说清楚", 12, false, Color.rgb(203, 239, 235));
+        status = chip("正在初始化", Color.argb(34, 255, 255, 255), Color.WHITE);
+        actor = chip("actor: ...", Color.argb(26, 255, 255, 255), Color.rgb(223, 250, 247));
         header.addView(title);
         header.addView(subtitle);
+        header.addView(principle);
         header.addView(status);
         header.addView(actor);
         root.addView(header);
 
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setPadding(dp(8), dp(8), dp(8), dp(8));
-        nav.setBackgroundColor(Color.WHITE);
-        addNav(nav, "首页", this::showHome);
-        addNav(nav, "上架", this::showListing);
-        addNav(nav, "直播", this::showLive);
-        addNav(nav, "队列", this::showQueue);
-        addNav(nav, "更新", this::showUpdate);
+        nav.setPadding(dp(10), dp(8), dp(10), dp(8));
+        nav.setBackgroundColor(COLOR_SURFACE);
+        addNav(nav, "home", "首页", this::showHome);
+        addNav(nav, "listing", "上架", this::showListing);
+        addNav(nav, "live", "直播", this::showLive);
+        addNav(nav, "queue", "队列", this::showQueue);
+        addNav(nav, "update", "更新", this::showUpdate);
         root.addView(nav);
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(12), dp(12), dp(12), dp(32));
+        content.setPadding(dp(14), dp(14), dp(14), dp(32));
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -163,19 +192,28 @@ public class NativeMainActivity extends Activity {
         return root;
     }
 
-    private void addNav(LinearLayout nav, String label, Runnable action) {
+    private void addNav(LinearLayout nav, String key, String label, Runnable action) {
         Button button = new Button(this);
+        button.setTag(key);
         button.setText(label);
         button.setAllCaps(false);
+        button.setTextSize(13);
+        button.setMinHeight(dp(42));
+        button.setPadding(dp(6), 0, dp(6), 0);
         button.setOnClickListener(view -> action.run());
-        nav.addView(button, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        navButtons.add(button);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(44), 1);
+        params.setMargins(dp(3), 0, dp(3), 0);
+        nav.addView(button, params);
     }
 
     private void showHome() {
+        activeTab = "home";
+        updateNavStyles();
         clear();
-        card("理念", "只上架双休不加班公司的产品。原生版会把关键动作签名后提交，服务器未确认时只显示待同步，不伪装成功。");
-        card("服务器 IPv6 连通", serverHealthText + "\n" + ServerApi.ROOT_URL);
-        Button health = button("检测服务器 IPv6 连通");
+        heroPanel();
+        statusGrid();
+        Button health = outlineButton("检测服务器 IPv6 连通", COLOR_BRAND);
         health.setOnClickListener(view -> checkServerHealth());
         content.addView(health);
         Button refresh = button("刷新服务器商品");
@@ -185,7 +223,7 @@ public class NativeMainActivity extends Activity {
     }
 
     private void renderProducts() {
-        addSection("服务器商品");
+        addSection("服务器商品", "只展示服务器返回的真实商品，不用本地假数据冒充。");
         if (latestProducts.length() == 0) {
             card("暂无远端商品", "如果服务器不可达，这里不会展示本地假商品为服务器商品。");
             return;
@@ -197,36 +235,58 @@ public class NativeMainActivity extends Activity {
             String sellerId = item.optString("storeId", item.optString("sellerId", ""));
             String title = item.optString("title", "未命名商品");
             String detail = "商户 " + sellerId + "\n价格 " + item.optString("price", "") + "\n" + item.optString("description", "");
-            LinearLayout row = card(title, detail);
+            LinearLayout row = productCard(item, title, detail);
             Button order = button("联系下单");
             order.setOnClickListener(view -> submitOrder(id));
-            Button report = button("签名举报");
+            Button report = outlineButton("签名举报", COLOR_CORAL);
             report.setOnClickListener(view -> submitReport(id, sellerId));
-            row.addView(order);
-            row.addView(report);
+            LinearLayout actions = new LinearLayout(this);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(0, dp(44), 1);
+            actionParams.setMargins(0, dp(10), dp(6), 0);
+            actions.addView(order, actionParams);
+            LinearLayout.LayoutParams reportParams = new LinearLayout.LayoutParams(0, dp(44), 1);
+            reportParams.setMargins(dp(6), dp(10), 0, 0);
+            actions.addView(report, reportParams);
+            row.addView(actions);
         }
     }
 
     private void showListing() {
+        activeTab = "listing";
+        updateNavStyles();
         clear();
-        addSection("原生上架商品");
+        addSection("上架商品", "拍照、填写详情、签名提交；服务器未确认时进入待同步队列。");
+        card("上架原则", "商品信息属于普通商城数据，可补图和编辑；店家 ID、投诉、评价和治理动作才进入信誉账本。");
         EditText sellerId = input("商户 ID，例如 artisan-lab");
         EditText title = input("商品标题");
         EditText price = input("价格，单位元");
         EditText contact = input("联系方式");
         EditText description = input("商品详情");
+        description.setMinLines(3);
         content.addView(sellerId);
         content.addView(title);
         content.addView(price);
         content.addView(contact);
         content.addView(description);
 
-        Button camera = button("拍照上传商品图片");
+        listingPhotoPreview = new ImageView(this);
+        listingPhotoPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        listingPhotoPreview.setBackground(rounded(COLOR_BACKGROUND, 16, COLOR_BORDER, 1));
+        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(168));
+        previewParams.setMargins(0, dp(8), 0, dp(8));
+        content.addView(listingPhotoPreview, previewParams);
+
+        listingPhotoStatus = text("图片状态：未拍照", 13, false);
+        listingPhotoStatus.setPadding(dp(2), 0, dp(2), dp(8));
+        content.addView(listingPhotoStatus);
+        updateListingPhotoPreview();
+
+        Button camera = outlineButton("拍照上传商品图片", COLOR_BLUE);
         camera.setOnClickListener(view -> requestPhoto());
         content.addView(camera);
-
-        TextView photoStatus = text("图片状态：" + (pendingPhotoDataUri.isEmpty() ? "未拍照" : "已拍照，提交时会上传为 data:image/jpeg"), 13, false);
-        content.addView(photoStatus);
 
         Button submit = button("签名并提交上架");
         submit.setOnClickListener(view -> submitProduct(
@@ -240,8 +300,10 @@ public class NativeMainActivity extends Activity {
     }
 
     private void showLive() {
+        activeTab = "live";
+        updateNavStyles();
         clear();
-        addSection("原生直播入口");
+        addSection("直播发现", "商户开播后登记发现信息，观众按商户索引进入直播。");
         card("当前版本策略", "原生版先做开播登记、摄像头/麦克风按需授权、信令发现和状态隔离。真正多人不卡顿直播后续应接入 WebRTC/SFU 原生库。");
         EditText sellerId = input("商户 ID");
         EditText title = input("直播标题");
@@ -254,7 +316,7 @@ public class NativeMainActivity extends Activity {
             requestLivePermission();
         });
         content.addView(start);
-        Button stop = button("结束当前商户直播登记");
+        Button stop = outlineButton("结束当前商户直播登记", COLOR_CORAL);
         stop.setOnClickListener(view -> endLiveSession(sellerId.getText().toString().trim()));
         content.addView(stop);
     }
@@ -263,8 +325,10 @@ public class NativeMainActivity extends Activity {
     private String liveTitleDraft = "";
 
     private void showQueue() {
+        activeTab = "queue";
+        updateNavStyles();
         clear();
-        addSection("队列与拒绝记录");
+        addSection("队列与拒绝记录", "这里永久保留未确认和被拒绝的关键动作，网络恢复后可以重试。");
         List<LocalStore.PendingAction> actions = store.pendingActions();
         card("队列状态", store.pendingCount() + " 个动作等待服务器确认，"
                 + store.rejectedCount() + " 个动作已被拒绝并保留记录。");
@@ -277,13 +341,15 @@ public class NativeMainActivity extends Activity {
     }
 
     private void showUpdate() {
+        activeTab = "update";
+        updateNavStyles();
         clear();
-        addSection("下载更新");
+        addSection("下载更新", "先拉取服务器下载信息，再校验 SHA256 和包名。");
         card("更新原则", "更新包必须来自服务器下载信息 API，并校验 SHA256 后才交给系统安装器。安装未知来源权限只在安装时申请。");
         Button check = button("检查 APK 更新");
         check.setOnClickListener(view -> checkUpdate());
         content.addView(check);
-        Button notify = button("开启同步通知");
+        Button notify = outlineButton("开启同步通知", COLOR_BLUE);
         notify.setOnClickListener(view -> requestNotificationPermission());
         content.addView(notify);
     }
@@ -309,7 +375,7 @@ public class NativeMainActivity extends Activity {
                 latestProducts = new JSONArray();
             }
             runOnUiThread(() -> {
-                status.setText(result.confirmed ? "服务器已确认 · 商品 " + latestProducts.length() : "服务器商品读取失败：" + result.message);
+                status.setText(result.confirmed ? "服务器已确认 · 商品 " + latestProducts.length() : "服务器商品读取失败：" + shortMessage(result.message));
                 showHome();
             });
         });
@@ -322,7 +388,7 @@ public class NativeMainActivity extends Activity {
             JSONObject ledger = result.data.optJSONObject("ledger");
             String text = result.confirmed
                     ? "已连通，账本事件 " + (ledger == null ? 0 : ledger.optInt("eventCount", 0))
-                    : "未连通，手机当前网络无法访问服务器 IPv6：" + result.message;
+                    : "未连通：" + shortMessage(result.message);
             runOnUiThread(() -> {
                 serverHealthText = text;
                 status.setText(text);
@@ -731,37 +797,232 @@ public class NativeMainActivity extends Activity {
         content.removeAllViews();
     }
 
-    private void addSection(String label) {
+    private void updateNavStyles() {
+        for (Button button : navButtons) {
+            boolean selected = activeTab.equals(String.valueOf(button.getTag()));
+            button.setTextColor(selected ? Color.WHITE : COLOR_MUTED);
+            button.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
+            button.setBackground(rounded(selected ? COLOR_BRAND : Color.TRANSPARENT, 14,
+                    selected ? COLOR_BRAND : COLOR_BORDER, selected ? 0 : 1));
+        }
+    }
+
+    private void heroPanel() {
+        LinearLayout panel = surfaceCard();
+        panel.setBackground(gradient(COLOR_BRAND_DARK, COLOR_BRAND, 20));
+        panel.addView(textColor("双休不加班，也可以有好商品", 21, true, Color.WHITE));
+        TextView body = textColor("这里支持按时下班的公司、员工和商户。商品可以自由上架，关键治理动作必须签名、可回溯、可复核。", 13, false, Color.rgb(225, 252, 248));
+        body.setPadding(0, dp(8), 0, dp(10));
+        panel.addView(body);
+
+        LinearLayout chips = new LinearLayout(this);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.addView(miniChip("服务器确认", COLOR_AMBER, COLOR_INK), new LinearLayout.LayoutParams(0, dp(34), 1));
+        LinearLayout.LayoutParams mid = new LinearLayout.LayoutParams(0, dp(34), 1);
+        mid.setMargins(dp(8), 0, dp(8), 0);
+        chips.addView(miniChip("签名凭证", Color.WHITE, COLOR_BRAND_DARK), mid);
+        chips.addView(miniChip("待同步留痕", COLOR_CORAL, Color.WHITE), new LinearLayout.LayoutParams(0, dp(34), 1));
+        panel.addView(chips);
+    }
+
+    private void statusGrid() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowParams.setMargins(0, 0, 0, dp(10));
+        content.addView(row, rowParams);
+
+        row.addView(statusTile("IPv6 服务器", serverHealthText, COLOR_BRAND), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        LinearLayout.LayoutParams queueParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        queueParams.setMargins(dp(10), 0, 0, 0);
+        row.addView(statusTile("本地队列", store.pendingCount() + " 待同步 / " + store.rejectedCount() + " 拒绝", COLOR_BLUE), queueParams);
+    }
+
+    private LinearLayout statusTile(String title, String body, int accent) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setPadding(dp(12), dp(12), dp(12), dp(12));
+        tile.setMinimumHeight(dp(112));
+        tile.setBackground(rounded(COLOR_SURFACE, 16, COLOR_BORDER, 1));
+        TextView dot = textColor("● " + title, 12, true, accent);
+        TextView detail = textColor(body, 12, false, COLOR_MUTED);
+        detail.setPadding(0, dp(7), 0, 0);
+        tile.addView(dot);
+        tile.addView(detail);
+        return tile;
+    }
+
+    private void addSection(String label, String caption) {
         TextView view = text(label, 18, true);
-        view.setPadding(0, dp(12), 0, dp(8));
+        view.setPadding(dp(2), dp(14), dp(2), dp(2));
         content.addView(view);
+        TextView captionView = textColor(caption, 12, false, COLOR_MUTED);
+        captionView.setPadding(dp(2), 0, dp(2), dp(8));
+        content.addView(captionView);
     }
 
     private LinearLayout card(String title, String body) {
+        LinearLayout card = surfaceCard();
+        card.addView(text(title, 16, true));
+        TextView bodyView = textColor(body, 13, false, COLOR_MUTED);
+        bodyView.setPadding(0, dp(7), 0, 0);
+        card.addView(bodyView);
+        return card;
+    }
+
+    private LinearLayout productCard(JSONObject item, String title, String body) {
+        LinearLayout card = surfaceCard();
+        String cover = productCover(item);
+        if (!cover.isEmpty()) {
+            ImageView image = imageBox(dp(150));
+            setImageSource(image, cover);
+            card.addView(image);
+        }
+        TextView titleView = text(title, 17, true);
+        titleView.setPadding(0, dp(cover.isEmpty() ? 0 : 10), 0, 0);
+        card.addView(titleView);
+        TextView bodyView = textColor(body, 13, false, COLOR_MUTED);
+        bodyView.setPadding(0, dp(6), 0, 0);
+        card.addView(bodyView);
+
+        LinearLayout chips = new LinearLayout(this);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setPadding(0, dp(10), 0, 0);
+        chips.addView(miniChip("服务器商品", COLOR_BRAND, Color.WHITE), new LinearLayout.LayoutParams(0, dp(32), 1));
+        LinearLayout.LayoutParams sellerParams = new LinearLayout.LayoutParams(0, dp(32), 1);
+        sellerParams.setMargins(dp(8), 0, 0, 0);
+        chips.addView(miniChip("可签名治理", COLOR_AMBER, COLOR_INK), sellerParams);
+        card.addView(chips);
+        return card;
+    }
+
+    private LinearLayout surfaceCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        card.setBackgroundColor(Color.WHITE);
+        card.setPadding(dp(15), dp(14), dp(15), dp(14));
+        card.setBackground(rounded(COLOR_SURFACE, 18, COLOR_BORDER, 1));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         params.setMargins(0, 0, 0, dp(10));
         content.addView(card, params);
-        card.addView(text(title, 16, true));
-        TextView bodyView = text(body, 13, false);
-        bodyView.setPadding(0, dp(6), 0, 0);
-        card.addView(bodyView);
         return card;
     }
 
+    private String productCover(JSONObject item) {
+        String direct = item.optString("image", "");
+        if (isImageSource(direct)) return direct.trim();
+        JSONArray images = item.optJSONArray("images");
+        if (images == null) return "";
+        for (int i = 0; i < images.length(); i++) {
+            String value = images.optString(i, "");
+            if (isImageSource(value)) return value.trim();
+        }
+        return "";
+    }
+
+    private boolean isImageSource(String value) {
+        if (value == null) return false;
+        String text = value.trim().toLowerCase(Locale.ROOT);
+        return text.startsWith("data:image/") || text.startsWith("http://") || text.startsWith("https://");
+    }
+
+    private ImageView imageBox(int height) {
+        ImageView image = new ImageView(this);
+        image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        image.setBackground(rounded(COLOR_BACKGROUND, 16, COLOR_BORDER, 1));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                height);
+        params.setMargins(0, 0, 0, dp(2));
+        image.setLayoutParams(params);
+        return image;
+    }
+
+    private void setImageSource(ImageView image, String source) {
+        if (image == null || source == null || source.trim().isEmpty()) return;
+        String normalized = source.trim();
+        image.setTag(normalized);
+        image.setImageDrawable(null);
+        if (normalized.toLowerCase(Locale.ROOT).startsWith("data:image/")) {
+            Bitmap bitmap = decodeImageSource(normalized);
+            if (bitmap != null) image.setImageBitmap(bitmap);
+            return;
+        }
+        executor.execute(() -> {
+            try {
+                byte[] data = api.download(normalized);
+                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                runOnUiThread(() -> {
+                    if (normalized.equals(image.getTag()) && bitmap != null) image.setImageBitmap(bitmap);
+                });
+            } catch (Exception ignored) {
+                runOnUiThread(() -> {
+                    if (normalized.equals(image.getTag())) image.setImageDrawable(null);
+                });
+            }
+        });
+    }
+
+    private Bitmap decodeImageSource(String source) {
+        int comma = source.indexOf(',');
+        if (comma < 0) return null;
+        try {
+            byte[] data = android.util.Base64.decode(source.substring(comma + 1), android.util.Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(data, 0, data.length);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void updateListingPhotoPreview() {
+        if (listingPhotoStatus == null || listingPhotoPreview == null) return;
+        if (pendingPhotoDataUri.isEmpty()) {
+            listingPhotoStatus.setText("图片状态：未拍照。点击下方按钮后才会申请摄像头权限。");
+            listingPhotoPreview.setImageDrawable(null);
+            listingPhotoPreview.setBackground(rounded(COLOR_BACKGROUND, 16, COLOR_BORDER, 1));
+            return;
+        }
+        listingPhotoStatus.setText("图片状态：已拍照，提交时会随商品一起上传。");
+        setImageSource(listingPhotoPreview, pendingPhotoDataUri);
+    }
+
     private TextView text(String value, int sp, boolean bold) {
+        return textColor(value, sp, bold, COLOR_INK);
+    }
+
+    private TextView textColor(String value, int sp, boolean bold, int color) {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(sp);
-        view.setTextColor(Color.rgb(23, 51, 48));
+        view.setTextColor(color);
         view.setGravity(Gravity.START);
-        if (bold) view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        view.setLineSpacing(0, 1.08f);
+        view.setIncludeFontPadding(true);
+        view.setTypeface(Typeface.DEFAULT, bold ? Typeface.BOLD : Typeface.NORMAL);
+        view.setLineSpacing(0, 1.12f);
+        return view;
+    }
+
+    private TextView chip(String value, int background, int textColor) {
+        TextView view = textColor(value, 12, false, textColor);
+        view.setPadding(dp(10), dp(7), dp(10), dp(7));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, dp(9), 0, 0);
+        view.setLayoutParams(params);
+        view.setBackground(rounded(background, 14, Color.argb(30, 255, 255, 255), 1));
+        return view;
+    }
+
+    private TextView miniChip(String value, int background, int textColor) {
+        TextView view = textColor(value, 12, true, textColor);
+        view.setGravity(Gravity.CENTER);
+        view.setSingleLine(true);
+        view.setPadding(dp(5), 0, dp(5), 0);
+        view.setBackground(rounded(background, 17, Color.TRANSPARENT, 0));
         return view;
     }
 
@@ -771,14 +1032,58 @@ public class NativeMainActivity extends Activity {
         input.setSingleLine(false);
         input.setMinLines(1);
         input.setTextSize(14);
+        input.setTextColor(COLOR_INK);
+        input.setHintTextColor(Color.rgb(124, 143, 148));
+        input.setPadding(dp(12), dp(9), dp(12), dp(9));
+        input.setBackground(rounded(COLOR_SURFACE, 14, COLOR_BORDER, 1));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, dp(9));
+        input.setLayoutParams(params);
         return input;
     }
 
     private Button button(String label) {
+        return styledButton(label, COLOR_BRAND, Color.WHITE, COLOR_BRAND);
+    }
+
+    private Button outlineButton(String label, int color) {
+        return styledButton(label, COLOR_SURFACE, color, color);
+    }
+
+    private Button styledButton(String label, int background, int textColor, int strokeColor) {
         Button button = new Button(this);
         button.setText(label);
         button.setAllCaps(false);
+        button.setTextSize(14);
+        button.setTextColor(textColor);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setMinHeight(dp(48));
+        button.setPadding(dp(12), 0, dp(12), 0);
+        button.setBackground(rounded(background, 14, strokeColor, background == strokeColor ? 0 : 1));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(48));
+        params.setMargins(0, dp(2), 0, dp(10));
+        button.setLayoutParams(params);
         return button;
+    }
+
+    private GradientDrawable rounded(int color, int radiusDp, int strokeColor, int strokeDp) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radiusDp));
+        if (strokeDp > 0) drawable.setStroke(dp(strokeDp), strokeColor);
+        return drawable;
+    }
+
+    private GradientDrawable gradient(int start, int end, int radiusDp) {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{start, end});
+        drawable.setCornerRadius(dp(radiusDp));
+        return drawable;
     }
 
     private boolean granted(int[] results) {
@@ -789,6 +1094,12 @@ public class NativeMainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private String shortMessage(String value) {
+        if (value == null || value.trim().isEmpty()) return "未知错误";
+        String compact = value.replace('\n', ' ').replace('\r', ' ').trim();
+        return compact.length() > 72 ? compact.substring(0, 72) + "..." : compact;
     }
 
     private void toast(String value) {

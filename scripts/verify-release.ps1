@@ -3,8 +3,8 @@ param(
     [string]$ApkPath = 'server\public\download\two-day-weekend-marketplace.apk',
     [string]$ExpectedPackage = 'com.twodayweekend.marketplace.nativeapp',
     [string]$ExpectedLabel = '双休超市',
-    [int]$ExpectedVersionCode = 3,
-    [string]$ExpectedVersionName = '0.2.1-native-alpha'
+    [int]$ExpectedVersionCode = 4,
+    [string]$ExpectedVersionName = '0.2.2-native-alpha'
 )
 
 $ErrorActionPreference = 'Stop'

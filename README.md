@@ -151,6 +151,22 @@ pwsh -NoProfile -File scripts\regression.ps1
 pwsh -NoProfile -File scripts\verify-release.ps1
 ```
 
+App 回测/真机冒烟：
+
+```powershell
+pwsh -NoProfile -File scripts\app-smoke.ps1
+```
+
+默认回测会检查 `android-native/app/build/outputs/apk/debug/app-debug.apk` 的 SHA256、包名、版本和应用名，并请求公网 IPv6 下载 API/下载链接输出远端版本与 SHA256。若当前没有在线 ADB 设备，脚本会跳过真机部分并给出 `WARN`，仍可用于无手机环境的非设备检查。
+
+强制真机冒烟：
+
+```powershell
+pwsh -NoProfile -File scripts\app-smoke.ps1 -RequireDevice
+```
+
+启用 `-RequireDevice` 后，没有在线 ADB 设备会失败。检测到设备时，脚本会检查 Android users/profile，避免同包名分身或重复实例；安装到 user 0；显式启动 `com.twodayweekend.marketplace.nativeapp/.NativeMainActivity`；验证焦点不是 `ResolverActivity`；确认 `CAMERA`、`RECORD_AUDIO`、`POST_NOTIFICATIONS` 未在启动后被运行时授予；并保存真机截图到 `artifacts/native-smoke-*.png`。
+
 运行回归后会在本机生成以下产物，它们会被 `.gitignore` 排除，不进入开源仓库：
 
 - APK：`android/app/build/outputs/apk/debug/app-debug.apk`
@@ -159,6 +175,7 @@ pwsh -NoProfile -File scripts\verify-release.ps1
 - 图标：`assets/branding/icon-1024.png`
 - 宣传海报：`assets/branding/poster-1080x1920.png`
 - 应用商店宣传图：`assets/branding/feature-1024x500.png`
+- 真机冒烟截图：`artifacts/native-smoke-*.png`
 
 ## 部署状态
 
